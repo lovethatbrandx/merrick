@@ -28,7 +28,7 @@ def post_message(session_id: str, peer: str, content: str) -> dict:
     client = get_client()
     resp = client.post(
         f"/v3/workspaces/{HONCHO_WORKSPACE}/sessions/{session_id}/messages",
-        json={"messages": [{"peer_id": peer, "content": content}]},
+        json={"messages": [{"peer_id": HONCHO_USER_PEER, "content": content}]},
     )
     resp.raise_for_status()
     data = resp.json()

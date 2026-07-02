@@ -8,7 +8,7 @@ import honcho
 
 logger = logging.getLogger("merrick.sync")
 
-MEM0_TO_HONCHO_SESSION = "merrick_mem0_import"
+MEM0_TO_HONCHO_SESSION = "merrick_mem0_facts"
 
 
 def sync_mem0_to_honcho() -> tuple[int, int]:
