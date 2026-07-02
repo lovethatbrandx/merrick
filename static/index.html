@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Merrick — Memory Bridge</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐘</text></svg>">
+</head>
+<body>
+  <div class="layout">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-brand">
+        <span class="header-logo">🐘</span>
+        <div>
+          <h1 class="header-title">Merrick</h1>
+          <p class="header-subtitle">Elephants Never Forget</p>
+        </div>
+      </div>
+      <nav class="header-nav">
+        <button class="nav-tab active" data-tab="dashboard">Dashboard</button>
+        <button class="nav-tab" data-tab="query">Query</button>
+        <button class="nav-tab" data-tab="synclog">Sync Log</button>
+      </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+      <!-- Dashboard Tab -->
+      <section id="tab-dashboard" class="tab-content active">
+        <!-- Stats Grid -->
+        <div class="stats-grid" id="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">mem0 Memories</div>
+            <div class="stat-value" id="stat-mem0-count">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Honcho Sessions</div>
+            <div class="stat-value" id="stat-honcho-sessions">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Honcho Conclusions</div>
+            <div class="stat-value" id="stat-honcho-conclusions">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Last Sync</div>
+            <div class="stat-value stat-value-sm" id="stat-last-sync">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Sync Status</div>
+            <div class="stat-value" id="stat-sync-status">—</div>
+          </div>
+          <div class="stat-card stat-card-action">
+            <button class="btn btn-primary btn-sync" id="btn-sync-now">
+              <span class="btn-text">Sync Now</span>
+              <span class="spinner hidden" id="sync-spinner"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Sample Cards -->
+        <div class="card-grid">
+          <div class="card">
+            <div class="card-header">
+              <span class="badge badge-mem0">mem0</span>
+              <span class="card-title">Recent Memories</span>
+            </div>
+            <div class="card-body" id="mem0-samples">
+              <div class="empty-state">Loading...</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="badge badge-honcho">Honcho</span>
+              <span class="card-title">Recent Conclusions</span>
+            </div>
+            <div class="card-body" id="honcho-samples">
+              <div class="empty-state">Loading...</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Query Tab -->
+      <section id="tab-query" class="tab-content">
+        <div class="query-container">
+          <div class="query-bar">
+            <input
+              type="text"
+              class="input"
+              id="query-input"
+              placeholder="Search memories and conclusions..."
+              autocomplete="off"
+            >
+            <button class="btn btn-primary" id="btn-search">
+              <span class="btn-text">Search Both Systems</span>
+              <span class="spinner hidden" id="search-spinner"></span>
+            </button>
+          </div>
+          <div id="query-results" class="query-results">
+            <div class="empty-state">
+              <p>Enter a query to search across mem0 and Honcho.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sync Log Tab -->
+      <section id="tab-synclog" class="tab-content">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Sync Operations</span>
+            <span class="muted" id="synclog-refresh-indicator">Auto-refreshing every 10s</span>
+          </div>
+          <div class="table-wrap">
+            <table id="synclog-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Direction</th>
+                  <th>Items Synced</th>
+                  <th>Errors</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="synclog-body">
+                <tr>
+                  <td colspan="5">
+                    <div class="empty-state">Loading sync log...</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

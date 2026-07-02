@@ -1,0 +1,19 @@
+services:
+  merrick:
+    build: .
+    container_name: merrick
+    ports:
+      - "5001:5001"
+    env_file:
+      - .env
+    environment:
+      - MERRICK_DB_HOST=host.docker.internal
+      - MERRICK_HONCHO_URL=http://host.docker.internal:8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
