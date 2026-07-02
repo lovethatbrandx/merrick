@@ -28,10 +28,14 @@ def post_message(session_id: str, peer: str, content: str) -> dict:
     client = get_client()
     resp = client.post(
         f"/v3/workspaces/{HONCHO_WORKSPACE}/sessions/{session_id}/messages",
-        json={"peer": peer, "content": content},
+        json={"messages": [{"peer_id": peer, "content": content}]},
     )
     resp.raise_for_status()
-    return resp.json()
+    data = resp.json()
+    # Honcho returns a list of created messages
+    if isinstance(data, list) and len(data) > 0:
+        return data[0]
+    return data
 
 
 def list_conclusions(limit: int = 100) -> list:
@@ -42,7 +46,10 @@ def list_conclusions(limit: int = 100) -> list:
     )
     resp.raise_for_status()
     data = resp.json()
-    return data if isinstance(data, list) else data.get("conclusions", [])
+    if isinstance(data, list):
+        return data
+    # Honcho returns {"items": [...], "total": N, ...}
+    return data.get("items", data.get("conclusions", []))
 
 
 def search_peers(peer_id: str, query: str) -> list:
@@ -64,4 +71,7 @@ def list_sessions() -> list:
     )
     resp.raise_for_status()
     data = resp.json()
-    return data if isinstance(data, list) else data.get("sessions", [])
+    if isinstance(data, list):
+        return data
+    # Honcho returns {"items": [...], "total": N, ...}
+    return data.get("items", data.get("sessions", []))
