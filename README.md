@@ -1,6 +1,6 @@
 # Merrick
 
-**Memory Bridge Service for Hermes AI**
+**Memory Bridge Service for Hermes Agent AI**
 
 > Named after Joseph Merrick (the Elephant Man), because elephants never forget.
 
@@ -17,7 +17,7 @@
 - [API Documentation](#api-documentation)
 - [Web UI Walkthrough](#web-ui-walkthrough)
 - [Database Schema](#database-schema)
-- [How Hermes Uses Merrick](#how-hermes-uses-merrick)
+- [How Hermes Agent Uses Merrick](#how-hermes-uses-merrick)
 - [Docker Deployment](#docker-deployment)
 - [Troubleshooting](#troubleshooting)
 - [Project Structure](#project-structure)
@@ -34,9 +34,9 @@ Merrick is a **bidirectional memory bridge** that keeps two AI memory systems in
 | **mem0** | Fast vector-based fact storage (pgvector in Supabase) | Semantic search, ~30 second setup | Shallow reasoning |
 | **Honcho** | Deep peer-to-peer reasoning engine | 90%+ on LongMem benchmarks, psychological modeling | Slower, isolated |
 
-**Before Merrick:** These systems were siloed. Hermes used mem0 for memory, Honcho had its own data, and they never talked to each other.
+**Before Merrick:** These systems were siloed. Hermes Agent used mem0 for memory, Honcho had its own data, and they never talked to each other.
 
-**After Merrick:** Bidirectional sync every 5 minutes. Hermes gets the best of both worlds — fast fact lookup AND deep cognitive reasoning.
+**After Merrick:** Bidirectional sync every 5 minutes. Hermes Agent gets the best of both worlds — fast fact lookup AND deep cognitive reasoning.
 
 ```
 Hermes Agent
@@ -50,7 +50,7 @@ Honcho (deep reasoning engine)
 
 ## Why Merrick Exists
 
-The Hermes AI agent needs memory that is both:
+The Hermes Agent AI agent needs memory that is both:
 1. **Fast** — search 288+ memories in milliseconds
 2. **Deep** — understand context, relationships, and psychological patterns
 
@@ -134,7 +134,7 @@ No single system does both well. Merrick bridges them so you don't have to choos
 ### Data Flow Through the Stack
 
 ```
-Hermes conversation
+Hermes Agent conversation
   │
   ├──▶ mem0 vector search (fast facts)
   │      ├──▶ Original mem0 memories (user-entered)
@@ -144,7 +144,7 @@ Hermes conversation
          └──▶ Conclusions fed back to mem0 via Merrick
 ```
 
-**Result:** Hermes automatically gets BOTH systems' data because Merrick feeds Honcho conclusions back into mem0. No config changes needed.
+**Result:** Hermes Agent automatically gets BOTH systems' data because Merrick feeds Honcho conclusions back into mem0. No config changes needed.
 
 ---
 
@@ -623,12 +623,12 @@ CREATE TABLE IF NOT EXISTS sync_log (
 
 ---
 
-## How Hermes Uses Merrick
+## How Hermes Agent Uses Merrick
 
 ### The Integration Path
 
 ```
-Hermes config (~/.hermes/config.yaml)
+Hermes Agent config (~/.hermes/config.yaml)
   │
   ├── memory_provider: mem0
   │
@@ -642,16 +642,16 @@ Hermes config (~/.hermes/config.yaml)
 
 ### Why "It Just Works"
 
-1. Hermes searches mem0 via vector search before each conversation turn
+1. Hermes Agent searches mem0 via vector search before each conversation turn
 2. Merrick feeds Honcho conclusions back into mem0 with `source: 'honcho'`
 3. mem0's `memories` table now contains BOTH original facts AND Honcho insights
-4. Hermes doesn't know or care where the data came from — it just gets richer memories
+4. Hermes Agent doesn't know or care where the data came from — it just gets richer memories
 
 ### No Config Changes Required
 
-Hermes's `~/.hermes/config.yaml` doesn't need any Merrick-specific configuration. The bridge is transparent because:
+Hermes Agent's `~/.hermes/config.yaml` doesn't need any Merrick-specific configuration. The bridge is transparent because:
 - Merrick writes directly to mem0's database table
-- Hermes reads from the same table
+- Hermes Agent reads from the same table
 - The `source` field in the payload distinguishes origin (informational only)
 
 ---
