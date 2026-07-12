@@ -26,8 +26,8 @@
         <button class="nav-tab" data-tab="analytics">Analytics</button>
         <button class="nav-tab" data-tab="export">Export</button>
         <span class="nav-divider"></span>
-        <a href="http://<your-tailscale-ip>:5000" target="_blank" class="nav-link" title="Open Hombre">🧠 Hombre</a>
-        <a href="http://<your-tailscale-ip>:3030" target="_blank" class="nav-link" title="Open mem0 Dashboard">🐘 mem0</a>
+        <a href="/ext/hombre" target="_blank" class="nav-link ext-link" data-port="5000" title="Open Hombre">🧠 Hombre</a>
+        <a href="/ext/mem0" target="_blank" class="nav-link ext-link" data-port="3030" title="Open mem0 Dashboard">🐘 mem0</a>
       </nav>
     </header>
 
@@ -254,5 +254,14 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script src="/static/app.js"></script>
+  <script>
+    // Resolve external service links from current hostname
+    document.querySelectorAll('.ext-link').forEach(link => {
+      const port = link.dataset.port;
+      if (port) {
+        link.href = `${window.location.protocol}//${window.location.hostname}:${port}`;
+      }
+    });
+  </script>
 </body>
 </html>
