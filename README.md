@@ -950,10 +950,10 @@ curl -X POST http://localhost:5001/api/query \
 
 ## License
 
-Internal project — BrandX / Pied Piper.
+MIT © 2026 BrandX
+
+See [LICENSE](LICENSE) for full terms.
 
 ---
 
 > *"Elephants never forget, and neither does Merrick."*
-
-Built with care for the Hermes AI agent. If something breaks, everything is going to be okay. I prepared a 47-page document on that.
