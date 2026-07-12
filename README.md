@@ -296,13 +296,7 @@ MERRICK_SYNC_INTERVAL=300
 MERRICK_SYNC_ENABLED=true
 ```
 
-### Network Access Points
-
-| Access Method | URL |
-|---------------|-----|
-| Localhost | http://localhost:5001 |
-| Tailscale | http://<your-tailscale-ip>:5001 |
-| Local Network | http://<your-local-ip>:5001 |
+> **Accessing the Dashboard:** The Merrick dashboard and API are served at `http://localhost:5001` on the host machine. For remote access, use your server's hostname or IP address — for example, your Tailscale IP if connecting over your tailnet.
 
 ---
 
