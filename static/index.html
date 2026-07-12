@@ -22,6 +22,12 @@
         <button class="nav-tab active" data-tab="dashboard">Dashboard</button>
         <button class="nav-tab" data-tab="query">Query</button>
         <button class="nav-tab" data-tab="synclog">Sync Log</button>
+        <button class="nav-tab" data-tab="categories">Categories</button>
+        <button class="nav-tab" data-tab="analytics">Analytics</button>
+        <button class="nav-tab" data-tab="export">Export</button>
+        <span class="nav-divider"></span>
+        <a href="http://<your-tailscale-ip>:5000" target="_blank" class="nav-link" title="Open Hombre">🧠 Hombre</a>
+        <a href="http://<your-tailscale-ip>:3030" target="_blank" class="nav-link" title="Open mem0 Dashboard">🐘 mem0</a>
       </nav>
     </header>
 
@@ -132,6 +138,112 @@
                 </tr>
               </tbody>
             </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Categories Tab -->
+      <section id="tab-categories" class="tab-content">
+        <div class="section-header">
+          <h2 class="section-title">Categories</h2>
+          <button class="btn btn-primary" id="btn-new-category">New Category</button>
+        </div>
+        <div id="new-category-form" class="category-form hidden">
+          <input type="text" class="input" id="cat-name-input" placeholder="Category name">
+          <input type="color" class="input-color" id="cat-color-input" value="#6366f1">
+          <button class="btn btn-primary" id="btn-create-category">Create</button>
+          <button class="btn btn-ghost" id="btn-cancel-category">Cancel</button>
+        </div>
+        <div class="category-grid" id="category-grid">
+          <div class="empty-state">Loading categories...</div>
+        </div>
+        <div id="category-memories" class="hidden">
+          <div class="section-header">
+            <h3 class="section-title" id="category-memories-title">Memories in Category</h3>
+            <button class="btn btn-ghost btn-sm" id="btn-back-categories">Back to Categories</button>
+          </div>
+          <div id="category-memories-list"></div>
+        </div>
+      </section>
+
+      <!-- Analytics Tab -->
+      <section id="tab-analytics" class="tab-content">
+        <div class="stats-grid" id="analytics-stats">
+          <div class="stat-card">
+            <div class="stat-label">Total Memories</div>
+            <div class="stat-value" id="analytics-total-memories">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Memories Today</div>
+            <div class="stat-value" id="analytics-today">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">This Week</div>
+            <div class="stat-value" id="analytics-week">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">This Month</div>
+            <div class="stat-value" id="analytics-month">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Categories</div>
+            <div class="stat-value" id="analytics-categories-count">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Webhooks</div>
+            <div class="stat-value" id="analytics-webhooks-count">—</div>
+          </div>
+        </div>
+        <div class="card-grid">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Source Breakdown</span>
+            </div>
+            <div class="card-body" id="analytics-sources">
+              <div class="empty-state">Loading...</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Categories</span>
+            </div>
+            <div class="card-body" id="analytics-categories">
+              <div class="empty-state">Loading...</div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-top: 16px;">
+          <div class="card-header">
+            <span class="card-title">Activity Timeline (30 days)</span>
+          </div>
+          <div class="card-body" id="analytics-timeline">
+            <div class="empty-state">Loading...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Export Tab -->
+      <section id="tab-export" class="tab-content">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Export Memories</span>
+          </div>
+          <div class="card-body">
+            <p class="muted" style="margin-bottom: 16px;">Export all memories in various formats. Categories are included where applicable.</p>
+            <div class="export-buttons">
+              <button class="btn btn-primary" onclick="App.exportData('json')">
+                <span class="btn-icon">{ }</span>
+                Export JSON
+              </button>
+              <button class="btn btn-primary" onclick="App.exportData('csv')">
+                <span class="btn-icon">CSV</span>
+                Export CSV
+              </button>
+              <button class="btn btn-primary" onclick="App.exportData('markdown')">
+                <span class="btn-icon">MD</span>
+                Export Markdown
+              </button>
+            </div>
           </div>
         </div>
       </section>

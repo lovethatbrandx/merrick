@@ -9,7 +9,10 @@ const App = {
     syncLog: [],
     searchResults: [],
     isLoading: false,
-    intervals: []
+    intervals: [],
+    categories: [],
+    categoryMemories: [],
+    analytics: null,
   },
 
   /* =========================================
@@ -37,6 +40,15 @@ const App = {
           this.loadSyncLog();
         }
       }, 10000)
+    );
+
+    // Auto-refresh categories every 60s
+    this.state.intervals.push(
+      setInterval(() => {
+        if (this.state.activeTab === 'categories') {
+          this.loadCategories();
+        }
+      }, 60000)
     );
   },
 
@@ -74,6 +86,56 @@ const App = {
         }
       });
     }
+
+    // Category buttons
+    const newCatBtn = document.getElementById('btn-new-category');
+    if (newCatBtn) {
+      newCatBtn.addEventListener('click', () => {
+        document.getElementById('new-category-form').classList.remove('hidden');
+        document.getElementById('cat-name-input').focus();
+      });
+    }
+
+    const cancelCatBtn = document.getElementById('btn-cancel-category');
+    if (cancelCatBtn) {
+      cancelCatBtn.addEventListener('click', () => {
+        document.getElementById('new-category-form').classList.add('hidden');
+        document.getElementById('cat-name-input').value = '';
+      });
+    }
+
+    const createCatBtn = document.getElementById('btn-create-category');
+    if (createCatBtn) {
+      createCatBtn.addEventListener('click', () => this.createCategory());
+    }
+
+    const backCatBtn = document.getElementById('btn-back-categories');
+    if (backCatBtn) {
+      backCatBtn.addEventListener('click', () => {
+        document.getElementById('category-memories').classList.add('hidden');
+        document.getElementById('category-grid').classList.remove('hidden');
+        document.querySelector('#tab-categories .section-header').classList.remove('hidden');
+      });
+    }
+
+    // Event delegation for category cards (view/delete buttons)
+    document.addEventListener('click', (e) => {
+      const viewBtn = e.target.closest('.btn-view');
+      if (viewBtn) {
+        this.viewCategoryMemories(viewBtn.dataset.catId, viewBtn.dataset.catName);
+        return;
+      }
+      const deleteBtn = e.target.closest('.btn-delete-cat');
+      if (deleteBtn) {
+        this.deleteCategory(deleteBtn.dataset.catId);
+        return;
+      }
+      const unassignBtn = e.target.closest('.btn-unassign');
+      if (unassignBtn) {
+        this.unassignMemory(unassignBtn.dataset.catId, unassignBtn.dataset.memId, unassignBtn.dataset.catName);
+        return;
+      }
+    });
   },
 
   /* =========================================
@@ -108,6 +170,15 @@ const App = {
         const input = document.getElementById('query-input');
         if (input) input.focus();
         break;
+      case 'categories':
+        this.loadCategories();
+        break;
+      case 'analytics':
+        this.loadAnalytics();
+        break;
+      case 'export':
+        // No loading needed
+        break;
     }
   },
 
@@ -133,7 +204,7 @@ const App = {
     this.setStat('stat-mem0-count', data.mem0_count ?? '—');
     this.setStat('stat-honcho-sessions', data.honcho_sessions ?? '—');
     this.setStat('stat-honcho-conclusions', data.honcho_conclusions ?? '—');
-    this.setStat('stat-last-sync', data.last_sync ? this.formatDate(data.last_sync) : 'Never');
+    this.setStat('stat-last-sync', data.last_sync ? this.formatDate(data.last_sync.completed_at || data.last_sync.started_at) : 'Never');
     this.setSyncStatus(data.sync_status || 'idle');
 
     // mem0 samples
@@ -316,7 +387,7 @@ const App = {
       const res = await fetch('/api/sync/log');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      this.state.syncLog = data.entries || data;
+      this.state.syncLog = data.log || data.entries || data;
       this.renderSyncLog(this.state.syncLog);
     } catch (err) {
       console.error('Failed to load sync log:', err);
@@ -344,7 +415,7 @@ const App = {
     }
 
     body.innerHTML = entries.map(entry => {
-      const time = entry.time || entry.timestamp || entry.created_at || '';
+      const time = entry.started_at || entry.time || entry.timestamp || entry.created_at || '';
       const direction = entry.direction || '—';
       const items = entry.items_synced ?? entry.items ?? '—';
       const errors = entry.errors ?? 0;
@@ -367,6 +438,276 @@ const App = {
         </tr>
       `;
     }).join('');
+  },
+
+  /* =========================================
+     Categories
+     ========================================= */
+
+  async loadCategories() {
+    try {
+      const res = await fetch('/api/categories');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      this.state.categories = data.categories || [];
+      this.renderCategories(this.state.categories);
+    } catch (err) {
+      console.error('Failed to load categories:', err);
+      const grid = document.getElementById('category-grid');
+      if (grid) grid.innerHTML = '<div class="empty-state">Failed to load categories</div>';
+    }
+  },
+
+  renderCategories(categories) {
+    const grid = document.getElementById('category-grid');
+    if (!grid) return;
+
+    if (!categories || categories.length === 0) {
+      grid.innerHTML = '<div class="empty-state">No categories yet. Create one to get started.</div>';
+      return;
+    }
+
+    grid.innerHTML = categories.map(cat => `
+      <div class="category-card" data-id="${this.escapeHtml(cat.id)}">
+        <div class="category-card-header">
+          <span class="category-dot" style="background: ${this.escapeHtml(cat.color)}"></span>
+          <span class="category-name">${this.escapeHtml(cat.name)}</span>
+          <span class="category-count">${cat.memory_count} memories</span>
+        </div>
+        <div class="category-card-actions">
+          <button class="btn btn-ghost btn-sm btn-view" data-cat-id="${this.escapeHtml(cat.id)}" data-cat-name="${this.escapeHtml(cat.name)}">View</button>
+          <button class="btn btn-ghost btn-sm btn-danger btn-delete-cat" data-cat-id="${this.escapeHtml(cat.id)}">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  },
+
+  async createCategory() {
+    const nameInput = document.getElementById('cat-name-input');
+    const colorInput = document.getElementById('cat-color-input');
+    const name = nameInput?.value?.trim();
+    const color = colorInput?.value || '#6366f1';
+
+    if (!name) {
+      this.toast('Please enter a category name', 'warning');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, color }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || `HTTP ${res.status}`);
+      }
+
+      this.toast(`Category "${name}" created`, 'success');
+      nameInput.value = '';
+      document.getElementById('new-category-form').classList.add('hidden');
+      await this.loadCategories();
+    } catch (err) {
+      console.error('Create category failed:', err);
+      this.toast(err.message || 'Failed to create category', 'error');
+    }
+  },
+
+  async deleteCategory(id) {
+    if (!confirm('Delete this category? Memories will not be deleted.')) return;
+
+    try {
+      const res = await fetch(`/api/categories/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      this.toast('Category deleted', 'success');
+      await this.loadCategories();
+    } catch (err) {
+      console.error('Delete category failed:', err);
+      this.toast('Failed to delete category', 'error');
+    }
+  },
+
+  async viewCategoryMemories(categoryId, categoryName) {
+    try {
+      const res = await fetch(`/api/categories/${categoryId}/memories`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      this.state.categoryMemories = data.memories || [];
+
+      // Show memories view
+      document.getElementById('category-grid').classList.add('hidden');
+      document.querySelector('#tab-categories .section-header').classList.add('hidden');
+      document.getElementById('category-memories').classList.remove('hidden');
+      document.getElementById('category-memories-title').textContent = `Memories in "${categoryName}" (${data.count})`;
+
+      const list = document.getElementById('category-memories-list');
+      if (this.state.categoryMemories.length === 0) {
+        list.innerHTML = '<div class="empty-state">No memories in this category</div>';
+        return;
+      }
+
+      list.innerHTML = this.state.categoryMemories.map(m => `
+        <div class="query-result">
+          <div class="query-result-header">
+            <span class="badge badge-mem0">${this.escapeHtml(m.source || 'mem0')}</span>
+            <span class="muted">${this.escapeHtml(String(m.id).substring(0, 16))}</span>
+            <button class="btn btn-ghost btn-sm btn-danger btn-unassign" data-cat-id="${this.escapeHtml(categoryId)}" data-mem-id="${this.escapeHtml(m.id)}" data-cat-name="${this.escapeHtml(categoryName)}">Remove</button>
+          </div>
+          <div class="query-result-text">${this.escapeHtml(m.data || '(empty)')}</div>
+        </div>
+      `).join('');
+    } catch (err) {
+      console.error('Load category memories failed:', err);
+      this.toast('Failed to load category memories', 'error');
+    }
+  },
+
+  async unassignMemory(categoryId, memoryId, categoryName) {
+    try {
+      const res = await fetch(`/api/categories/${categoryId}/unassign/${memoryId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      this.toast('Memory removed from category', 'success');
+      await this.viewCategoryMemories(categoryId, categoryName);
+    } catch (err) {
+      console.error('Unassign memory failed:', err);
+      this.toast('Failed to remove memory', 'error');
+    }
+  },
+
+  /* =========================================
+     Analytics
+     ========================================= */
+
+  async loadAnalytics() {
+    try {
+      const [overviewRes, sourcesRes, categoriesRes, timelineRes] = await Promise.all([
+        fetch('/api/analytics/overview'),
+        fetch('/api/analytics/sources'),
+        fetch('/api/analytics/categories'),
+        fetch('/api/analytics/timeline?period=day&days=30'),
+      ]);
+
+      if (overviewRes.ok) {
+        const overview = await overviewRes.json();
+        this.setStat('analytics-total-memories', overview.total_memories ?? '—');
+        this.setStat('analytics-today', overview.memories_today ?? '—');
+        this.setStat('analytics-week', overview.memories_this_week ?? '—');
+        this.setStat('analytics-month', overview.memories_this_month ?? '—');
+        this.setStat('analytics-categories-count', overview.total_categories ?? '—');
+        this.setStat('analytics-webhooks-count', overview.total_webhooks ?? '—');
+      }
+
+      if (sourcesRes.ok) {
+        const sources = await sourcesRes.json();
+        this.renderAnalyticsSources(sources.sources || []);
+      }
+
+      if (categoriesRes.ok) {
+        const cats = await categoriesRes.json();
+        this.renderAnalyticsCategories(cats.categories || []);
+      }
+
+      if (timelineRes.ok) {
+        const timeline = await timelineRes.json();
+        this.renderAnalyticsTimeline(timeline.timeline || []);
+      }
+    } catch (err) {
+      console.error('Failed to load analytics:', err);
+    }
+  },
+
+  renderAnalyticsSources(sources) {
+    const el = document.getElementById('analytics-sources');
+    if (!el) return;
+
+    if (!sources || sources.length === 0) {
+      el.innerHTML = '<div class="empty-state">No source data yet</div>';
+      return;
+    }
+
+    const maxCount = Math.max(...sources.map(s => s.count));
+    el.innerHTML = sources.map(s => {
+      const pct = maxCount > 0 ? (s.count / maxCount * 100) : 0;
+      const badgeClass = s.source === 'mem0' ? 'badge-mem0' :
+                         s.source === 'honcho' ? 'badge-honcho' : '';
+      return `
+        <div class="analytics-bar-row">
+          <span class="badge ${badgeClass}">${this.escapeHtml(s.source)}</span>
+          <div class="analytics-bar-track">
+            <div class="analytics-bar-fill" style="width: ${pct}%"></div>
+          </div>
+          <span class="analytics-bar-count">${s.count}</span>
+        </div>
+      `;
+    }).join('');
+  },
+
+  renderAnalyticsCategories(categories) {
+    const el = document.getElementById('analytics-categories');
+    if (!el) return;
+
+    if (!categories || categories.length === 0) {
+      el.innerHTML = '<div class="empty-state">No categories yet</div>';
+      return;
+    }
+
+    const maxCount = Math.max(...categories.map(c => c.count));
+    el.innerHTML = categories.map(c => {
+      const pct = maxCount > 0 ? (c.count / maxCount * 100) : 0;
+      return `
+        <div class="analytics-bar-row">
+          <span class="category-dot-sm" style="background: ${this.escapeHtml(c.color)}"></span>
+          <span class="analytics-bar-label">${this.escapeHtml(c.name)}</span>
+          <div class="analytics-bar-track">
+            <div class="analytics-bar-fill" style="width: ${pct}%; background: ${this.escapeHtml(c.color)}"></div>
+          </div>
+          <span class="analytics-bar-count">${c.count}</span>
+        </div>
+      `;
+    }).join('');
+  },
+
+  renderAnalyticsTimeline(timeline) {
+    const el = document.getElementById('analytics-timeline');
+    if (!el) return;
+
+    if (!timeline || timeline.length === 0) {
+      el.innerHTML = '<div class="empty-state">No activity data yet</div>';
+      return;
+    }
+
+    const maxCount = Math.max(...timeline.map(t => t.count));
+    el.innerHTML = `
+      <div class="timeline-chart">
+        ${timeline.map(t => {
+          const pct = maxCount > 0 ? (t.count / maxCount * 100) : 0;
+          const dateStr = new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          return `
+            <div class="timeline-bar-wrapper" title="${dateStr}: ${t.count}">
+              <div class="timeline-bar" style="height: ${pct}%"></div>
+              <span class="timeline-label">${dateStr}</span>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  },
+
+  /* =========================================
+     Export
+     ========================================= */
+
+  exportData(format) {
+    const url = `/api/export/${format}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `merrick_export.${format === 'markdown' ? 'md' : format}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    this.toast(`Exporting as ${format.toUpperCase()}...`, 'info');
   },
 
   /* =========================================

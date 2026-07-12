@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import database as db
 import honcho
 from config import HONCHO_USER_PEER, logger
@@ -8,7 +8,7 @@ router = APIRouter(prefix="/api", tags=["query"])
 
 
 class QueryRequest(BaseModel):
-    query: str
+    query: str = Field(..., min_length=1)
 
 
 @router.post("/query")

@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 import config
 import database as db
@@ -12,6 +14,11 @@ import sync
 from routes.sync import router as sync_router
 from routes.query import router as query_router
 from routes.status import router as status_router
+from routes.memory import router as memory_router
+from routes.categories import router as categories_router
+from routes.webhooks import router as webhooks_router
+from routes.analytics import router as analytics_router
+from routes.export import router as export_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -61,6 +68,19 @@ app.add_middleware(
 app.include_router(sync_router)
 app.include_router(query_router)
 app.include_router(status_router)
+app.include_router(memory_router)
+app.include_router(categories_router)
+app.include_router(webhooks_router)
+app.include_router(analytics_router)
+app.include_router(export_router)
+
+# Serve static files (dashboard UI)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+@app.get("/")
+def dashboard():
+    return FileResponse("static/index.html")
 
 
 @app.get("/api/health")

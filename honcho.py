@@ -1,17 +1,20 @@
 import httpx
 import logging
+import threading
 from config import HONCHO_URL, HONCHO_WORKSPACE, HONCHO_USER_PEER
 
 logger = logging.getLogger("merrick.honcho")
 
 _client = None
+_lock = threading.Lock()
 
 
 def get_client():
     global _client
-    if _client is None or _client.is_closed:
-        _client = httpx.Client(base_url=HONCHO_URL, timeout=30.0)
-    return _client
+    with _lock:
+        if _client is None or _client.is_closed:
+            _client = httpx.Client(base_url=HONCHO_URL, timeout=30.0)
+        return _client
 
 
 def create_session(session_id: str, title: str = "Merrick Import") -> dict:

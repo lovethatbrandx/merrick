@@ -140,6 +140,34 @@ body {
   background: var(--primary-dim);
 }
 
+.nav-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 8px;
+  flex-shrink: 0;
+}
+
+.nav-link {
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nav-link:hover {
+  color: var(--text-secondary);
+  background: var(--bg-card);
+}
+
 /* ============================================
    Tab Content
    ============================================ */
@@ -652,4 +680,230 @@ tr:hover td {
   .query-bar {
     flex-direction: column;
   }
+
+  .header-nav {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+/* ============================================
+   Section Header
+   ============================================ */
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ============================================
+   Category Cards
+   ============================================ */
+
+.category-form {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.category-form .input {
+  max-width: 300px;
+}
+
+.input-color {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  cursor: pointer;
+  padding: 2px;
+}
+
+.input-color::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.input-color::-webkit-color-swatch {
+  border: none;
+  border-radius: 4px;
+}
+
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.category-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  transition: border-color 0.15s ease;
+}
+
+.category-card:hover {
+  border-color: var(--border-focus);
+}
+
+.category-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.category-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.category-dot-sm {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.category-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+}
+
+.category-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.category-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.btn-danger {
+  color: var(--error);
+  border-color: var(--error-dim);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--error-dim);
+  color: var(--error);
+}
+
+.btn-icon {
+  font-family: var(--mono);
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* ============================================
+   Analytics
+   ============================================ */
+
+.analytics-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.analytics-bar-row:last-child {
+  border-bottom: none;
+}
+
+.analytics-bar-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  min-width: 80px;
+}
+
+.analytics-bar-track {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-input);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.analytics-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.analytics-bar-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 30px;
+  text-align: right;
+  font-family: var(--mono);
+}
+
+.timeline-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 150px;
+  padding: 0 4px;
+}
+
+.timeline-bar-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.timeline-bar {
+  width: 100%;
+  max-width: 20px;
+  background: var(--primary);
+  border-radius: 3px 3px 0 0;
+  min-height: 2px;
+  transition: height 0.3s ease;
+}
+
+.timeline-label {
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+/* ============================================
+   Export
+   ============================================ */
+
+.export-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
 }

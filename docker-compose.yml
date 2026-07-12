@@ -9,6 +9,7 @@ services:
     environment:
       - MERRICK_DB_HOST=host.docker.internal
       - MERRICK_HONCHO_URL=http://host.docker.internal:8000
+      - MERRICK_MEM0_API_URL=http://host.docker.internal:8888
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

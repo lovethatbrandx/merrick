@@ -24,6 +24,11 @@ def sync_mem0_to_honcho() -> tuple[int, int]:
         logger.error("Failed to query mem0 memories: %s", e)
         return 0, 1
 
+    try:
+        honcho.create_session(MEM0_TO_HONCHO_SESSION, "Merrick Mem0 Import")
+    except Exception:
+        pass
+
     for row in rows:
         mem0_id = str(row["id"])
         data = row["data"]
@@ -36,11 +41,6 @@ def sync_mem0_to_honcho() -> tuple[int, int]:
         )
         if existing:
             continue
-
-        try:
-            honcho.create_session(MEM0_TO_HONCHO_SESSION, "Merrick Mem0 Import")
-        except Exception:
-            pass
 
         try:
             result = honcho.post_message(
@@ -118,11 +118,13 @@ def sync_honcho_to_mem0() -> tuple[int, int]:
 
 
 def run_full_sync() -> dict:
-    log_id = db.query_one(
-        """INSERT INTO sync_log (direction, status) VALUES ('mem0_to_honcho', 'running')
-           RETURNING id"""
+    db.execute(
+        """INSERT INTO sync_log (direction, status) VALUES ('mem0_to_honcho', 'running')"""
     )
-    log_id_val = str(log_id["id"]) if log_id else None
+    log_row = db.query_one(
+        "SELECT id FROM sync_log ORDER BY started_at DESC LIMIT 1"
+    )
+    log_id_val = str(log_row["id"]) if log_row else None
 
     total_synced = 0
     total_errors = 0
