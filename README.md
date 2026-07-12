@@ -950,7 +950,7 @@ curl -X POST http://localhost:5001/api/query \
 
 ## License
 
-MIT © 2026 BrandX
+MIT © 2026 Brand X
 
 See [LICENSE](LICENSE) for full terms.
 
