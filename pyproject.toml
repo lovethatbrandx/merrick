@@ -7,7 +7,7 @@ name = "merrick-cli"
 version = "0.1.0"
 description = "CLI for managing the Merrick memory daemon"
 readme = "README.md"
-license = {text = "MIT"}
+license = {text = "AGPL-3.0"}
 requires-python = ">=3.10"
 dependencies = [
     "click>=8.1",

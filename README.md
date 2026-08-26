@@ -1,700 +1,175 @@
-# Merrick
+<div align="center">
+  <img src="static/merrick_logo.png" alt="Merrick" width="400">
 
-**Memory Bridge Service for Hermes AI**
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg?style=for-the-badge)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![MCP](https://img.shields.io/badge/MCP-FF6B35?style=for-the-badge&logo=datauri&logoColor=white)](https://modelcontextprotocol.io/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![OpenCode](https://img.shields.io/badge/~%24_OpenCode-000000?style=for-the-badge&logo=terminal&logoColor=green)](https://opencode.ai)
+[![MiMo](https://img.shields.io/badge/MiMo-FF6B35?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/XiaomiMiMo/MiMo-V2.5)
 
-> Named after Joseph Merrick (the Elephant Man), because elephants never forget.
+</div>
 
----
+<p align="center">
+  <img src="static/app_screenshot.png" alt="Merrick Dashboard" width="800">
+</p>
 
-## Table of Contents
+## Why This Exists
 
-- [What Merrick Is](#what-merrick-is)
-- [Why Merrick Exists](#why-merrick-exists)
-- [Architecture](#architecture)
-- [Tech Stack](#tech-stack)
-- [Quick Start](#quick-start)
-- [Configuration Reference](#configuration-reference)
-- [API Documentation](#api-documentation)
-- [Web UI Walkthrough](#web-ui-walkthrough)
-- [Database Schema](#database-schema)
-- [How Hermes Uses Merrick](#how-hermes-uses-merrick)
-- [Docker Deployment](#docker-deployment)
-- [Troubleshooting](#troubleshooting)
-- [Project Structure](#project-structure)
-- [Contributing](#contributing)
+No single AI memory system does everything well. [mem0](https://mem0.ai) is fast and great for vector-based fact lookup, but it's shallow. [Honcho](https://honcho.dev) is a deep peer-to-peer reasoning engine that crushes long-context benchmarks, but it's slower and isolated. Before Merrick, if you wanted both speed and depth, you had to pick one and live with the tradeoffs.
 
----
+Merrick is a bidirectional memory bridge that keeps both systems in sync. Your agent gets fast fact lookup from mem0 AND deep cognitive reasoning from Honcho — automatically, every 5 minutes. No config changes required. No choosing sides.
 
-## What Merrick Is
+Built entirely with AI coding tools ([OpenCode](https://opencode.ai) + [MiMo](https://huggingface.co/XiaomiMiMo/MiMo-V2.5)). No shame about it.
 
-Merrick is a **bidirectional memory bridge** that keeps two AI memory systems in sync:
+## Recent Updates
 
-| System | What It Does | Strength | Weakness |
-|--------|-------------|----------|----------|
-| **mem0** | Fast vector-based fact storage (pgvector in Supabase) | Semantic search, ~30 second setup | Shallow reasoning |
-| **Honcho** | Deep peer-to-peer reasoning engine | 90%+ on LongMem benchmarks, psychological modeling | Slower, isolated |
+This project is actively maintained. Here's what's landed recently.
 
-**Before Merrick:** These systems were siloed. Hermes used mem0 for memory, Honcho had its own data, and they never talked to each other.
+### 2026.8.25 — v2.0: The Universal Memory Daemon
 
-**After Merrick:** Bidirectional sync every 5 minutes. Hermes gets the best of both worlds — fast fact lookup AND deep cognitive reasoning.
+Merrick is no longer just a sync bridge. It's a full memory daemon with device provisioning, API key authentication, an MCP server, a CLI, and a dreaming loop that keeps memories clean.
 
-```
-Hermes Agent
-    ↓ searches
-mem0 (fast facts, vector search)
-    ↑↓ Merrick sync (every 5 min)
-Honcho (deep reasoning engine)
-```
+- **Agent Profiles** — define specialized memory contexts per agent with custom system prompts and token budgets. Routes: `routes/agents.py`
+- **API Key Authentication** — SHA-256 hashed keys with per-device scoping, rate limiting, and expiration. Keys look like `mk_...` and are shown once at creation time.
+- **MCP Server** — full [Model Context Protocol](https://modelcontextprotocol.io/) integration. Tools: `write_memory`, `search_memories`, `list_memories`, `get_memory`, `delete_memory`, `get_status`. Resources: `merrick://status`, `merrick://memories`. Works with LM Studio, Claude Desktop, VS Code, and any MCP-compatible client.
+- **CLI (`merrick_cli`)** — manage everything from the terminal: `merrick status`, `merrick devices`, `merrick keys create`, `merrick memory write/search/export`, `merrick sync`, `merrick doctor`. Rich output with tables and panels.
+- **Dreaming Loop** — background compaction cycle that deduplicates memories, detects contradictions (same topic, different values), and marks stale memories as compacted. No data deleted — just flagged for recovery.
+- **Device Provisioning** — auto-creates Honcho peers and mem0 users on first device connect. Thread-safe caching, graceful fallback to the global user peer for unknown devices.
+- **Standalone Docker** — `docker-compose.yml` runs PostgreSQL + Merrick only. For users who already run Honcho/mem0 elsewhere. `docker-compose.full.yml` brings up everything (PostgreSQL, Redis, Honcho, mem0, Merrick) in one shot.
+- **External API (`/v1/*`)** — device-scoped memory read/write/search via Bearer token auth. OpenAI-compatible `/v1/chat/completions` endpoint with memory-augmented generation.
+- **Middleware Stack** — API key validation, per-key rate limiting (token bucket), request logging. All in `middleware/auth.py`.
 
----
+### What's Next
 
-## Why Merrick Exists
+- **Setup Wizard** — one-click detection and configuration of Honcho, mem0, and PostgreSQL from the dashboard.
+- **PyPI Package** — `pip install merrick` for the CLI.
+- **System Service** — `merrick install` for systemd/launchd integration.
 
-The Hermes AI agent needs memory that is both:
-1. **Fast** — search 288+ memories in milliseconds
-2. **Deep** — understand context, relationships, and psychological patterns
+## Features
 
-No single system does both well. Merrick bridges them so you don't have to choose.
+- **Bidirectional Sync** — mem0 ↔ Honcho every 5 minutes (configurable). Fault-tolerant: if one direction fails, the other still runs.
+- **Agent Profiles** — define per-agent memory contexts with custom system prompts and token budgets. Agents get their own scoped memories.
+- **API Key Auth** — SHA-256 hashed keys (`mk_...` prefix), per-device scoping, rate limiting (RPM + RPD), optional expiration. Raw key shown once at creation.
+- **MCP Server** — stdio transport. Exposes `write_memory`, `search_memories`, `list_memories`, `get_memory`, `delete_memory`, `get_status` as tools. `merrick://status` and `merrick://memories` as resources.
+- **CLI** — `merrick status|devices|keys|memory|sync|doctor`. Rich output, error handling, connection diagnostics.
+- **Dreaming Loop** — deduplication via Jaccard similarity + word overlap. Contradiction detection (same topic opener, different content). Stale memory compaction. Covers both `memories` and `agent_memories` tables.
+- **Device Provisioning** — auto-creates Honcho peers (`device_{id}`) and mem0 users on first connect. Thread-safe in-memory cache with DB persistence.
+- **External API** — `/v1/memory/write`, `/v1/memory/search`, `/v1/memory/read`, `/v1/chat/completions`, `/v1/device/info`, `/v1/device/ping`, `/v1/sync/status`. All require Bearer token auth.
+- **Cross-System Search** — `POST /api/query` searches both mem0 (full-text) and Honcho (peer search) simultaneously, deduplicates by content.
+- **Dashboard** — dark-themed SPA with tabs for Overview, Query, Sync Log, Devices, Settings. Auto-refreshes every 30 seconds.
+- **Categories** — organize memories into named categories with color coding. Assign/unassign memories via API.
+- **Webhooks** — fire on `memory.created`, `sync.completed`, `device.registered`, `key.rotated`. HMAC-SHA256 signed payloads.
+- **Analytics** — memory creation timeline, source breakdown, per-category counts, per-device breakdown.
+- **Export** — JSON, CSV, Markdown. Full backup includes settings, devices, keys, memories, sync log, and analytics summary.
+- **Rate Limiting** — in-memory token bucket per API key. Configurable RPM and RPD limits.
+- **Settings Cascade** — database overrides > config file (`~/.merrick/config.json`) > env vars > hardcoded defaults.
 
----
+### Additional Features
 
-## Architecture
+- **Soft Compaction** — dreaming marks memories as compacted rather than deleting them. Everything is recoverable.
+- **Mem0 API-First** — all mem0 writes go through the mem0 API (port 8888), never direct SQL (except bulk sync import).
+- **Thread-Safe Singleton** — Honcho client uses `threading.Lock`. No separate httpx clients — always `honcho.get_client()`.
+- **Fire-and-Forget Analytics** — audit and analytics writes don't block user-facing responses.
+- **Browser Caching Fix** — all GET requests use `cache: 'no-store'` to prevent stale data.
+- **Event Loop Protection** — all synchronous I/O wrapped in `asyncio.to_thread()` to prevent event loop blocking.
+- **Security Headers** — CSP, HSTS, X-Content-Type-Options, X-Frame-Options, X-XSS-Protection.
+- **UUID Validation** — all route UUID params validated with `_validate_uuid()` helper. SQL uses `%s::uuid` casting.
+- **Frontend Event Delegation** — `addEventListener` on container elements only. No `onclick` attributes (XSS prevention).
 
-### High-Level Overview
+## Prerequisites
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                     Hermes Agent                        │
-│  (config: ~/.hermes/config.yaml, provider: mem0)       │
-└───────────────────┬─────────────────────────────────────┘
-                    │ vector search
-                    ▼
-┌─────────────────────────────────────────────────────────┐
-│                    mem0                                  │
-│  PostgreSQL + pgvector (Supabase)                       │
-│  Database: postgres | Table: memories                   │
-│  Port: 5433                                             │
-│  ~288 memories                                          │
-└───────────────────▲──────────────────┬──────────────────┘
-                    │                  │
-                    │                  │ write Honcho conclusions
-                    │                  │ with source='honcho'
-                    │                  ▼
-┌───────────────────┴──────────────────────────────────┐
-│                    Merrick                            │
-│  FastAPI service (port 5001)                          │
-│                                                       │
-│  ┌─────────────┐  ┌──────────────┐  ┌─────────────┐ │
-│  │ sync.py     │  │ honcho.py    │  │ database.py │ │
-│  │ (engine)    │  │ (HTTP client)│  │ (psycopg2)  │ │
-│  └─────────────┘  └──────────────┘  └─────────────┘ │
-│                                                       │
-│  Tables: sync_state, sync_log                         │
-└───────────────────▲──────────────────┬──────────────┘
-                    │                  │
-                    │ read conclusions │ post facts as
-                    │                  │ messages
-                    │                  ▼
-┌───────────────────┴──────────────────────────────────┐
-│                    Honcho                             │
-│  Reasoning engine (port 8000)                         │
-│  Workspace: hermes                                    │
-│  Peer: ron                                            │
-│  Session: merrick_mem0_facts                          │
-└──────────────────────────────────────────────────────┘
-```
+You need these running before Merrick can start:
 
-### Sync Flow Detail
+1. **PostgreSQL with pgvector** — on port `5433` (or configure `MERRICK_DB_HOST`/`MERRICK_DB_PORT`)
+   - The `postgres` database with pgvector extension installed
+2. **Honcho** — API on port `8000` (or configure `MERRICK_HONCHO_URL`)
+   - Workspace `hermes` created, peer `ron` created
+3. **mem0** — connected to the same PostgreSQL instance
+   - The `memories` table populated with at least a few entries
 
-```
-┌──────────────────────────────────────────────────────┐
-│                 SYNC (every 5 min)                    │
-│                                                       │
-│  Direction 1: mem0 → Honcho                          │
-│  ─────────────────────────────                       │
-│  1. Query all rows from `memories` table             │
-│  2. For each unsynced memory:                        │
-│     a. Create session `merrick_mem0_facts` (if needed)│
-│     b. Post fact as message (peer: "merrick")        │
-│     c. Record in sync_state                          │
-│                                                       │
-│  Direction 2: Honcho → mem0                          │
-│  ─────────────────────────────                       │
-│  1. List Honcho conclusions (limit: 100)             │
-│  2. For each unsynced conclusion:                    │
-│     a. Insert into `memories` table                  │
-│     b. Set source='honcho', user_id='ron'            │
-│     c. Record in sync_state                          │
-│                                                       │
-│  Fault tolerance: If one direction fails, the other  │
-│  still runs. Errors are logged, not fatal.           │
-└──────────────────────────────────────────────────────┘
-```
-
-### Data Flow Through the Stack
-
-```
-Hermes conversation
-  │
-  ├──▶ mem0 vector search (fast facts)
-  │      ├──▶ Original mem0 memories (user-entered)
-  │      └──▶ Honcho conclusions (synced by Merrick)
-  │
-  └──▶ Honcho reasoning (deep analysis)
-         └──▶ Conclusions fed back to mem0 via Merrick
-```
-
-**Result:** Hermes automatically gets BOTH systems' data because Merrick feeds Honcho conclusions back into mem0. No config changes needed.
-
----
-
-## Tech Stack
-
-| Component | Technology | Version |
-|-----------|-----------|---------|
-| **Backend** | Python FastAPI | 0.138.0 |
-| **Server** | Uvicorn | 0.49.0 |
-| **Database** | PostgreSQL (Supabase) | 15+ |
-| **Vector Engine** | pgvector | via Supabase |
-| **HTTP Client** | httpx | 0.28.1 |
-| **DB Driver** | psycopg2-binary | 2.9.10 |
-| **Frontend** | Vanilla HTML/CSS/JS | — |
-| **Container** | Docker | — |
-| **Base Image** | python:3.12-slim | — |
-
----
+If you're starting fresh, use `docker-compose.full.yml` which brings up everything.
 
 ## Quick Start
 
-### Prerequisites
+There are two ways to run Merrick: **from source** (good for development) and **Docker** (preferred for production). Both work perfectly fine — pick whichever fits your workflow.
 
-Before running Merrick, you need:
+### Option 1: Run from Source (Development)
 
-1. **Supabase** running locally
-   - PostgreSQL on port `5433`
-   - Kong on port `8001`
-   - The `postgres` database with pgvector extension
+Best for: active development, testing changes quickly, or running alongside Honcho on the same machine without Docker overhead.
 
-2. **Honcho** running locally
-   - API on port `8000`
-   - Workspace `hermes` created
-   - Peer `ron` created
-
-3. **mem0** configured with pgvector
-   - Connected to the same Supabase PostgreSQL instance
-   - The `memories` table populated
-
-### Option A: Docker (Recommended)
+Requires Python 3.10+.
 
 ```bash
-# 1. Clone the repo
 git clone https://github.com/lovethatbrandx/merrick.git
 cd merrick
-
-# 2. Create your .env file
-cp .env.example .env
-# Edit .env with your actual values
-
-# 3. Build and run
-docker compose up -d --build
-
-# 4. Verify it's running
-curl http://localhost:5001/api/health
-# {"status":"ok","service":"merrick"}
-```
-
-### Option B: Local Development
-
-```bash
-# 1. Clone the repo
-git clone https://github.com/lovethatbrandx/merrick.git
-cd merrick
-
-# 2. Create a virtual environment
-python3 -m venv .venv
+python -m venv .venv
 source .venv/bin/activate
-
-# 3. Install dependencies
 pip install -r requirements.txt
+```
 
-# 4. Create your .env file
+Set the required environment variables:
+
+```bash
+export MERRICK_DB_HOST=localhost
+export MERRICK_DB_PORT=5433
+export MERRICK_DB_USER=postgres
+export MERRICK_DB_PASSWORD=your_password
+export MERRICK_DB_NAME=postgres
+export MERRICK_HONCHO_URL=http://localhost:8000
+export MERRICK_MEM0_API_URL=http://localhost:8888
+```
+
+Then run with live reload (auto-restarts on code changes):
+
+```bash
+python3 -m uvicorn app:app --host 0.0.0.0 --port 5001 --reload
+```
+
+Or without auto-reload:
+
+```bash
+python app.py
+```
+
+Dashboard runs at `http://localhost:5001`.
+
+### Option 2: Docker (Production Preferred)
+
+Best for: production deployments, consistent environments, zero dependency conflicts, and easy updates.
+
+#### Standalone (default)
+
+Runs PostgreSQL + Merrick only. Honcho and mem0 run elsewhere and are connected via `host.docker.internal`.
+
+```bash
+git clone https://github.com/lovethatbrandx/merrick.git
+cd merrick
 cp .env.example .env
 # Edit .env with your actual values
-
-# 5. Run the server
-python app.py
-# Server starts on http://localhost:5001
+docker compose up -d --build
 ```
 
-### First-Time Verification
+#### Full Stack
 
-After starting Merrick, run these checks:
+Runs everything: PostgreSQL, Redis, Honcho, mem0, and Merrick.
 
 ```bash
-# Health check
-curl http://localhost:5001/api/health
-# Expected: {"status":"ok","service":"merrick"}
-
-# System status (should show mem0 memories and Honcho sessions)
-curl http://localhost:5001/api/status
-
-# Trigger a manual sync
-curl -X POST http://localhost:5001/api/sync/trigger
-
-# Check sync results
-curl http://localhost:5001/api/sync/status
+docker compose -f docker-compose.full.yml up -d --build
 ```
 
----
-
-## Configuration Reference
-
-All configuration is via environment variables (loaded from `.env`).
-
-### Database
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MERRICK_DB_HOST` | `host.docker.internal` | PostgreSQL host |
-| `MERRICK_DB_PORT` | `5433` | PostgreSQL port |
-| `MERRICK_DB_USER` | `postgres` | Database user |
-| `MERRICK_DB_PASSWORD` | `supabase_strong_password_2026!` | Database password |
-| `MERRICK_DB_NAME` | `postgres` | Database name |
-
-### Honcho
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MERRICK_HONCHO_URL` | `http://host.docker.internal:8000` | Honcho API base URL |
-| `MERRICK_HONCHO_WORKSPACE` | `hermes` | Honcho workspace name |
-| `MERRICK_HONCHO_USER_PEER` | `ron` | Peer ID for user data |
-
-### Sync
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MERRICK_SYNC_INTERVAL` | `300` | Sync interval in seconds (5 minutes) |
-| `MERRICK_SYNC_ENABLED` | `true` | Enable/disable background sync |
-
-### Full `.env` Example
-
-```bash
-# PostgreSQL (mem0's database)
-MERRICK_DB_HOST=host.docker.internal
-MERRICK_DB_PORT=5433
-MERRICK_DB_USER=postgres
-MERRICK_DB_PASSWORD=supabase_strong_password_2026!
-MERRICK_DB_NAME=postgres
-
-# Honcho
-MERRICK_HONCHO_URL=http://host.docker.internal:8000
-MERRICK_HONCHO_WORKSPACE=hermes
-MERRICK_HONCHO_USER_PEER=ron
-
-# Sync
-MERRICK_SYNC_INTERVAL=300
-MERRICK_SYNC_ENABLED=true
-```
-
-> **Accessing the Dashboard:** The Merrick dashboard and API are served at `http://localhost:5001` on the host machine. For remote access, use your server's hostname or IP address — for example, your Tailscale IP if connecting over your tailnet.
-
----
-
-## API Documentation
-
-### Base URL
-
-```
-http://localhost:5001
-```
-
-### Endpoints
-
-#### `GET /api/health`
-
-Service health check. Returns immediately.
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "service": "merrick"
-}
-```
-
----
-
-#### `GET /api/status`
-
-Dashboard statistics. Queries both mem0 and Honcho for counts and samples.
-
-**Response:**
-```json
-{
-  "mem0_memories": 288,
-  "honcho_sessions": 5,
-  "honcho_conclusions": 12,
-  "last_sync": {
-    "id": "...",
-    "direction": "mem0_to_honcho",
-    "items_synced": 15,
-    "errors": 0,
-    "started_at": "2026-07-02T10:00:00Z",
-    "completed_at": "2026-07-02T10:00:12Z",
-    "status": "completed"
-  },
-  "sync_state_counts": [
-    {
-      "source": "mem0",
-      "target": "honcho",
-      "cnt": 280
-    },
-    {
-      "source": "honcho",
-      "target": "mem0",
-      "cnt": 12
-    }
-  ]
-}
-```
-
-**Error handling:** If a subsystem is unreachable, its count returns `"error"` instead of a number.
-
----
-
-#### `POST /api/sync/trigger`
-
-Manually trigger a full bidirectional sync. Runs in a background task — returns immediately.
-
-**Request:**
-```bash
-curl -X POST http://localhost:5001/api/sync/trigger
-```
-
-**Response:**
-```json
-{
-  "status": "sync_triggered"
-}
-```
-
-**Behavior:**
-- Runs `sync_mem0_to_honcho()` then `sync_honcho_to_mem0()`
-- If one direction fails, the other still runs
-- Results are logged to the `sync_log` table
-- Check `/api/sync/status` for completion
-
----
-
-#### `GET /api/sync/status`
-
-Current sync state and statistics.
-
-**Response:**
-```json
-{
-  "last_sync": {
-    "id": "...",
-    "direction": "mem0_to_honcho",
-    "items_synced": 15,
-    "errors": 0,
-    "started_at": "2026-07-02T10:00:00Z",
-    "completed_at": "2026-07-02T10:00:12Z",
-    "status": "completed"
-  },
-  "running_count": 0,
-  "sync_state_counts": [
-    {
-      "source": "mem0",
-      "target": "honcho",
-      "cnt": 280
-    }
-  ]
-}
-```
-
----
-
-#### `GET /api/sync/log`
-
-History of sync operations. Sorted by most recent first.
-
-**Parameters:**
-| Param | Type | Default | Description |
-|-------|------|---------|-------------|
-| `limit` | int | `50` | Max entries to return |
-
-**Request:**
-```bash
-curl "http://localhost:5001/api/sync/log?limit=10"
-```
-
-**Response:**
-```json
-{
-  "log": [
-    {
-      "id": "...",
-      "direction": "mem0_to_honcho",
-      "items_synced": 15,
-      "errors": 0,
-      "started_at": "2026-07-02T10:00:00Z",
-      "completed_at": "2026-07-02T10:00:12Z",
-      "status": "completed"
-    }
-  ]
-}
-```
-
----
-
-#### `POST /api/query`
-
-Search across both mem0 and Honcho simultaneously. Deduplicates results by content.
-
-**Request:**
-```bash
-curl -X POST http://localhost:5001/api/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "what is the user"}'
-```
-
-**Response:**
-```json
-{
-  "results": [
-    {
-      "source": "mem0",
-      "data": "The user prefers dark mode and uses Vim",
-      "user_id": "ron"
-    },
-    {
-      "source": "honcho",
-      "data": "User demonstrates strong preference for keyboard-driven workflows",
-      "metadata": {
-        "id": "...",
-        "peer_id": "ron",
-        "content": "..."
-      }
-    }
-  ],
-  "count": 2
-}
-```
-
-**Search behavior:**
-- mem0: Full-text search using PostgreSQL `tsvector` (`to_tsvector('simple', ...)` + `plainto_tsquery`)
-- Honcho: Peer search via Honcho's `/v3/workspaces/{workspace}/peers/{peer_id}/search` endpoint
-- Deduplication: Results with identical `data` content are deduplicated
-
----
-
-## Web UI Walkthrough
-
-Merrick includes a single-page dashboard at `http://localhost:5001`. Dark theme, responsive, no build step required.
-
-### Tab 1: Dashboard
-
-The default view. Shows:
-
-**Stats Grid (top):**
-| Stat | Description |
-|------|-------------|
-| mem0 Memories | Total count from `memories` table |
-| Honcho Sessions | Total sessions in Honcho workspace |
-| Honcho Conclusions | Total conclusions in Honcho (limit: 100) |
-| Last Sync | Timestamp of most recent sync operation |
-| Sync Status | `Running`, `Idle`, or `Error` badge |
-| Sync Now | Button to trigger manual sync |
-
-**Sample Cards (bottom):**
-- **Recent Memories** — Sample entries from mem0's `memories` table
-- **Recent Conclusions** — Sample entries from Honcho's conclusions
-
-**Auto-refresh:** Dashboard refreshes every 30 seconds when the tab is active.
-
-### Tab 2: Query
-
-Cross-system search interface.
-
-- **Search bar** — Type any query, press Enter or click "Search Both Systems"
-- **Results** — Each result shows:
-  - **Source badge** — Blue for mem0, purple for Honcho
-  - **Content** — The matching text
-  - **Relevance score** (when available from the source system)
-
-**Behavior:**
-- Searches mem0 via full-text PostgreSQL search
-- Searches Honcho via peer search API
-- Results are interleaved and deduplicated
-- Clicking "Search Both Systems" shows a spinner while both systems are queried
-
-### Tab 3: Sync Log
-
-Table of all sync operations.
-
-| Column | Description |
-|--------|-------------|
-| Time | When the sync started (relative: "5m ago") |
-| Direction | `mem0_to_honcho` or `honcho_to_mem0` |
-| Items Synced | Number of items synced in this operation |
-| Errors | Error count (red badge if > 0) |
-| Status | `completed`, `completed_with_errors`, or `running` |
-
-**Auto-refresh:** Sync log refreshes every 10 seconds when the tab is active.
-
-### UI Technical Details
-
-- **Theme:** Dark (CSS variables, `#0a0a0f` background)
-- **Framework:** Vanilla JS, no dependencies
-- **SPA routing:** Tab switching via `data-tab` attributes
-- **Toast notifications:** Bottom-right, auto-dismiss after 4 seconds
-- **Responsive:** Grid adapts at 768px and 640px breakpoints
-- **Favicon:** Elephant emoji (svg/data URI)
-
----
-
-## Database Schema
-
-Merrick creates two tables on startup via `database.init_schema()`.
-
-### `sync_state`
-
-Tracks which items have been synced between systems. Prevents duplicates.
-
-```sql
-CREATE TABLE IF NOT EXISTS sync_state (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    source TEXT NOT NULL CHECK (source IN ('mem0', 'honcho')),
-    source_id TEXT NOT NULL,
-    target TEXT NOT NULL CHECK (target IN ('mem0', 'honcho')),
-    target_id TEXT,
-    synced_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(source, source_id, target)
-);
-```
-
-**Columns:**
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `source` | TEXT | Origin system (`mem0` or `honcho`) |
-| `source_id` | TEXT | ID of the item in the source system |
-| `target` | TEXT | Destination system (`mem0` or `honcho`) |
-| `target_id` | TEXT | ID of the item in the target system (may be null) |
-| `synced_at` | TIMESTAMPTZ | When this sync was recorded |
-
-**Unique constraint:** `(source, source_id, target)` — prevents syncing the same item twice.
-
-### `sync_log`
-
-History of sync operations.
-
-```sql
-CREATE TABLE IF NOT EXISTS sync_log (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    direction TEXT NOT NULL CHECK (direction IN ('mem0_to_honcho', 'honcho_to_mem0')),
-    items_synced INTEGER DEFAULT 0,
-    errors INTEGER DEFAULT 0,
-    started_at TIMESTAMPTZ DEFAULT NOW(),
-    completed_at TIMESTAMPTZ,
-    status TEXT DEFAULT 'running'
-);
-```
-
-**Columns:**
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `direction` | TEXT | `mem0_to_honcho` or `honcho_to_mem0` |
-| `items_synced` | INTEGER | Number of items synced |
-| `errors` | INTEGER | Number of errors during sync |
-| `started_at` | TIMESTAMPTZ | When sync started |
-| `completed_at` | TIMESTAMPTZ | When sync completed (null if still running) |
-| `status` | TEXT | `running`, `completed`, or `completed_with_errors` |
-
-### Supabase Tables Used
-
-| Table | Owner | Used By |
-|-------|-------|---------|
-| `postgres.memories` | mem0 | Read (mem0→Honcho), Write (Honcho→mem0) |
-| `postgres.sync_state` | Merrick | Read/Write (deduplication tracking) |
-| `postgres.sync_log` | Merrick | Read/Write (sync history) |
-
----
-
-## How Hermes Uses Merrick
-
-### The Integration Path
-
-```
-Hermes config (~/.hermes/config.yaml)
-  │
-  ├── memory_provider: mem0
-  │
-  └── mem0 connects to Supabase PostgreSQL
-        │
-        └── memories table (288 entries)
-              │
-              ├── 285 original mem0 facts
-              └── 3 synced from Honcho (via Merrick, source='honcho')
-```
-
-### Why "It Just Works"
-
-1. Hermes searches mem0 via vector search before each conversation turn
-2. Merrick feeds Honcho conclusions back into mem0 with `source: 'honcho'`
-3. mem0's `memories` table now contains BOTH original facts AND Honcho insights
-4. Hermes doesn't know or care where the data came from — it just gets richer memories
-
-### No Config Changes Required
-
-Hermes's `~/.hermes/config.yaml` doesn't need any Merrick-specific configuration. The bridge is transparent because:
-- Merrick writes directly to mem0's database table
-- Hermes reads from the same table
-- The `source` field in the payload distinguishes origin (informational only)
-
----
-
-## Docker Deployment
-
-### Dockerfile
-
-```dockerfile
-FROM python:3.12-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-EXPOSE 5001
-CMD ["python", "app.py"]
-```
-
-### docker-compose.yml
-
-```yaml
-services:
-  merrick:
-    build: .
-    container_name: merrick
-    ports:
-      - "5001:5001"
-    env_file:
-      - .env
-    environment:
-      - MERRICK_DB_HOST=host.docker.internal
-      - MERRICK_HONCHO_URL=http://host.docker.internal:8000
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/api/health')"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    restart: unless-stopped
-```
-
-### Docker Commands
+#### Which Compose File?
+
+| Scenario | File | Recommendation |
+|----------|------|----------------|
+| You already run Honcho + mem0 | `docker-compose.yml` | **Standalone** — connects to your existing services |
+| Starting from scratch | `docker-compose.full.yml` | **Full stack** — everything in one shot |
+| CI/CD or automated deployments | `docker-compose.yml` | **Standalone** — fewer dependencies, faster startup |
+| Quick test of the full system | `docker-compose.full.yml` | **Full stack** — zero external setup needed |
+
+#### Docker Commands
 
 ```bash
 # Build and start
@@ -713,246 +188,330 @@ docker compose down
 docker compose up -d --build --force-recreate
 ```
 
-### Health Check
+#### Update
 
-The container includes a health check that hits `/api/health` every 10 seconds:
-- **Interval:** 10 seconds
-- **Timeout:** 5 seconds
-- **Retries:** 3 (marks unhealthy after 30 seconds of failures)
-
----
-
-## Troubleshooting
-
-### Service Won't Start
-
-**Problem:** Merrick exits immediately after starting.
-
-**Checks:**
-1. Is Supabase PostgreSQL running on port 5433?
-   ```bash
-   psql -h localhost -p 5433 -U postgres -d postgres -c "SELECT 1"
-   ```
-
-2. Is Honcho running on port 8000?
-   ```bash
-   curl http://localhost:8000/health
-   ```
-
-3. Are your `.env` values correct?
-   ```bash
-   cat .env
-   ```
-
-### Sync Returns 0 Items
-
-**Problem:** Sync completes but `items_synced` is always 0.
-
-**Causes:**
-- mem0's `memories` table is empty
-- Honcho has no conclusions
-- All items are already synced (check `sync_state` table)
-
-**Check:**
 ```bash
-# Count mem0 memories
-psql -h localhost -p 5433 -U postgres -d postgres \
-  -c "SELECT COUNT(*) FROM memories"
-
-# Count synced items
-psql -h localhost -p 5433 -U postgres -d postgres \
-  -c "SELECT source, target, COUNT(*) FROM sync_state GROUP BY source, target"
+cd your/deploy/folder/
+docker compose pull
+docker compose up -d
 ```
 
-### Honcho Connection Refused
+### Which Should I Pick?
 
-**Problem:** `honcho.py` errors with connection refused.
+| Scenario | Recommendation |
+|----------|----------------|
+| Developing Merrick itself | **Run from source** — use `--reload` for instant feedback |
+| Running Merrick + Honcho on one machine | **Run from source** — less overhead, both share the same host |
+| Production / daily driver | **Docker** — set it and forget it, auto-restarts if it crashes |
+| Quick test without installing Python deps | **Docker** — no venv, no pip, just `docker compose up -d` |
+| Full stack from scratch | **Docker full** — `docker-compose.full.yml` brings up everything |
+| CI/CD or automated deployments | **Docker** — reproducible, no manual setup steps |
 
-**Causes:**
-- Honcho not running on port 8000
-- Docker networking issue (use `host.docker.internal` in Docker)
-- Firewall blocking the connection
+## Architecture
 
-**Fix:**
-```bash
-# From inside Docker container, test Honcho connectivity
-docker exec -it merrick python -c "import urllib.request; print(urllib.request.urlopen('http://host.docker.internal:8000').read())"
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         MERRICK DAEMON                              │
+│                                                                     │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────────────┐  │
+│  │ Dashboard │  │ Internal │  │ External │  │   Sync Engine     │  │
+│  │   SPA     │  │  /api/*  │  │  /v1/*   │  │  (Background)     │  │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────────┬──────────┘  │
+│       │              │              │                  │             │
+│  ┌────┴──────────────┴──────────────┴──────────────────┴──────────┐ │
+│  │                     MIDDLEWARE LAYER                           │ │
+│  │  CORS · Auth (API Key) · Rate Limiting · Request Logging      │ │
+│  └────────────────────────┬──────────────────────────────────────┘ │
+│                           │                                        │
+│  ┌────────────────────────┴──────────────────────────────────────┐ │
+│  │                     SERVICE LAYER                             │ │
+│  │  Settings · Devices · Keys · Memory · Analytics · Webhooks   │ │
+│  └────┬─────────────┬──────────────┬────────────────────────────┘ │
+│       │             │              │                               │
+│  ┌────┴────┐  ┌─────┴─────┐  ┌────┴──────┐                      │
+│  │ mem0    │  │  Honcho    │  │ PostgreSQL │                      │
+│  │ Client  │  │  Client    │  │ (Merrick)  │                      │
+│  └────┬────┘  └─────┬─────┘  └────┬──────┘                      │
+└───────┼──────────────┼──────────────┼──────────────────────────────┘
+        │              │              │
+┌───────┴──┐  ┌───────┴──────┐  ┌────┴──────────────────────┐
+│  mem0    │  │   Honcho     │  │   PostgreSQL + pgvector    │
+│  (port   │  │   (port 8000 │  │   (port 5433)              │
+│  8888)   │  │   or cloud)  │  │   - memories (mem0)        │
+│          │  │              │  │   - merrick_* (internal)    │
+└──────────┘  └──────────────┘  └────────────────────────────┘
+
+Device Fleet:
+┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
+│ Desktop  │  │ Android  │  │  iOS     │  │ Discord  │
+│ Client   │  │ Client   │  │ Client   │  │  Bot     │
+│          │  │          │  │          │  │          │
+│ Bearer   │  │ Bearer   │  │ Bearer   │  │ Bearer   │
+│ token    │  │ token    │  │ token    │  │ token    │
+└────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘
+     │              │              │              │
+     └──────────────┴──────────────┴──────────────┘
+                        │
+                   /v1/* (external API)
+                        │
+                   ┌────┴────┐
+                   │ MERRICK │
+                   └─────────┘
 ```
 
-### Sync Shows "completed_with_errors"
+- **Sync Engine**: Background daemon thread runs `run_full_sync()` every N seconds. Bidirectional: mem0 → Honcho (posts facts as messages) and Honcho → mem0 (inserts conclusions into `memories` table). Tracks state in `sync_state` to prevent duplicates.
+- **Dreaming Loop**: Separate background cycle that deduplicates memories (Jaccard similarity + word overlap), detects contradictions (same topic, different values), and marks stale memories as compacted.
+- **Middleware**: API key validation via SHA-256 hash lookup, per-key rate limiting (token bucket), request logging.
+- **Device Provisioning**: Auto-creates Honcho peers (`device_{id}`) and mem0 users on first connect. Thread-safe cache with DB persistence.
+- **Dashboard SPA**: Vanilla HTML/CSS/JS, dark theme. Tabs: Overview, Query, Sync Log, Devices, Settings.
 
-**Problem:** Sync completes but with error count > 0.
+## Configuration
 
-**Check the logs:**
+All configuration is via environment variables (loaded from `.env`).
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `MERRICK_DB_HOST` | Yes | `localhost` | PostgreSQL host |
+| `MERRICK_DB_PORT` | Yes | `5433` | PostgreSQL port |
+| `MERRICK_DB_USER` | Yes | `postgres` | Database user |
+| `MERRICK_DB_PASSWORD` | Yes | *(empty)* | Database password |
+| `MERRICK_DB_NAME` | Yes | `postgres` | Database name |
+| `MERRICK_HONCHO_URL` | Yes | `http://localhost:8000` | Honcho API base URL |
+| `MERRICK_HONCHO_WORKSPACE` | No | `hermes` | Honcho workspace name |
+| `MERRICK_HONCHO_USER_PEER` | No | `ron` | Default Honcho peer ID |
+| `MERRICK_MEM0_API_URL` | Yes | `http://localhost:8888` | mem0 API base URL |
+| `MERRICK_MEM0_EMAIL` | No | *(empty)* | mem0 dashboard login |
+| `MERRICK_MEM0_PASSWORD` | No | *(empty)* | mem0 dashboard password |
+| `MERRICK_SYNC_INTERVAL` | No | `300` | Seconds between sync runs (5 min) |
+| `MERRICK_SYNC_ENABLED` | No | `true` | Enable/disable background sync |
+| `MERRICK_SERVER_HOST` | No | `0.0.0.0` | Bind address |
+| `MERRICK_SERVER_PORT` | No | `5001` | Listen port |
+| `MERRICK_LOG_LEVEL` | No | `INFO` | Logging verbosity |
+| `MERRICK_RATE_LIMIT_RPM` | No | `60` | Default requests per minute |
+| `MERRICK_RATE_LIMIT_RPD` | No | `10000` | Default requests per day |
+| `MERRICK_LLM_PROVIDER` | No | `openai` | LLM provider (`openai`, `anthropic`, `ollama`, `custom`) |
+| `MERRICK_LLM_API_KEY` | No | *(empty)* | LLM API key |
+| `MERRICK_LLM_MODEL` | No | `gpt-4` | Default model name |
+
+> **Note:** Config cascades: database overrides > config file (`~/.merrick/config.json`) > env vars > hardcoded defaults. Real passwords must never be hardcoded.
+
+## API Endpoints
+
+### Internal Namespace: `/api/*`
+
+All `/api/*` routes are **unauthenticated** (dashboard and local CLI use only).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/health` | Health check |
+| `GET` | `/api/status` | Dashboard aggregate stats (mem0 count, honcho sessions, sync state) |
+| `POST` | `/api/query` | Cross-system search with deduplication |
+| `POST` | `/api/memory/write` | Write to both mem0 + Honcho (no device association) |
+| `POST` | `/api/memory/reasoning` | Honcho peer search for deep reasoning |
+| `POST` | `/api/sync/trigger` | Trigger a full sync run (background) |
+| `GET` | `/api/sync/status` | Current sync status + state counts |
+| `GET` | `/api/sync/log` | Sync history (paginated: `?limit=50&offset=0`) |
+| `GET` | `/api/categories` | List all categories with memory counts |
+| `POST` | `/api/categories` | Create a category |
+| `DELETE` | `/api/categories/{id}` | Delete a category |
+| `POST` | `/api/categories/{id}/assign` | Assign a memory to a category |
+| `DELETE` | `/api/categories/{id}/unassign/{memory_id}` | Remove memory from category |
+| `GET` | `/api/webhooks` | List all webhooks |
+| `POST` | `/api/webhooks` | Create a webhook |
+| `PUT` | `/api/webhooks/{id}` | Update a webhook |
+| `DELETE` | `/api/webhooks/{id}` | Delete a webhook |
+| `POST` | `/api/webhooks/{id}/test` | Test-fire a webhook |
+| `GET` | `/api/analytics/overview` | Aggregate stats |
+| `GET` | `/api/analytics/timeline` | Memory creation over time |
+| `GET` | `/api/analytics/sources` | Breakdown by source |
+| `GET` | `/api/analytics/categories` | Breakdown by category |
+| `GET` | `/api/analytics/devices` | Per-device breakdown |
+| `POST` | `/api/analytics/track` | Track a custom event |
+| `GET` | `/api/export/json` | Export memories as JSON |
+| `GET` | `/api/export/csv` | Export as CSV |
+| `GET` | `/api/export/markdown` | Export as Markdown |
+| `GET` | `/api/export/full` | Full backup (settings + devices + keys + memories) |
+| `GET` | `/api/devices` | List all provisioned devices |
+| `POST` | `/api/devices` | Register a new device |
+| `GET` | `/api/devices/{id}` | Get device details + key list |
+| `PUT` | `/api/devices/{id}` | Update device metadata |
+| `DELETE` | `/api/devices/{id}` | Deactivate a device |
+| `POST` | `/api/devices/{id}/keys` | Create an API key for a device |
+| `GET` | `/api/devices/{id}/keys` | List keys for a device |
+| `DELETE` | `/api/keys/{key_id}` | Revoke an API key |
+| `POST` | `/api/keys/{key_id}/rotate` | Rotate an API key |
+| `GET` | `/api/agents` | List agent profiles |
+| `POST` | `/api/agents` | Create an agent profile |
+| `PUT` | `/api/agents/{slug}` | Update an agent profile |
+| `DELETE` | `/api/agents/{slug}` | Delete an agent profile |
+| `POST` | `/api/agents/{slug}/memories` | Write a memory via agent context |
+| `POST` | `/api/agents/{slug}/query` | Search memories via agent context |
+| `POST` | `/api/dreaming/run` | Manually trigger a dreaming cycle |
+| `GET` | `/api/dreaming/stats` | Get compaction statistics |
+
+### External Namespace: `/v1/*`
+
+All `/v1/*` routes require a valid API key via `Authorization: Bearer <key>`.
+
+| Method | Path | Description | Scopes Required |
+|--------|------|-------------|-----------------|
+| `POST` | `/v1/memory/write` | Write a memory (scoped to device) | `memory.write` |
+| `POST` | `/v1/memory/search` | Search memories | `memory.read` |
+| `POST` | `/v1/memory/read` | Read a specific memory by ID | `memory.read` |
+| `POST` | `/v1/chat/completions` | Memory-augmented chat completion (OpenAI-compatible) | `query.read` |
+| `GET` | `/v1/device/info` | Get own device info | `device.read` |
+| `POST` | `/v1/device/ping` | Update last_seen_at, report metadata | `device.read` |
+| `GET` | `/v1/sync/status` | Sync status for this device | `sync.read` |
+
+## MCP Server
+
+Merrick ships with a full [Model Context Protocol](https://modelcontextprotocol.io/) server. Any MCP-compatible client (LM Studio, Claude Desktop, VS Code, etc.) can use Merrick's memory system directly.
+
+### Tools
+
+| Tool | Description |
+|------|-------------|
+| `write_memory` | Write a memory to Merrick. Stores in both mem0 and Honcho. |
+| `search_memories` | Search memories by query across mem0 and Honcho. |
+| `list_memories` | List recent memories, optionally filtered by category. |
+| `get_memory` | Get a specific memory by ID. |
+| `delete_memory` | Delete a memory (currently returns guidance — no HTTP delete endpoint yet). |
+| `get_status` | Get Merrick health status, counts, and sync info. |
+
+### Resources
+
+| Resource | Description |
+|----------|-------------|
+| `merrick://status` | Merrick health status as a readable JSON resource. |
+| `merrick://memories` | The 20 most recent memories as a readable JSON resource. |
+
+### Running the MCP Server
+
 ```bash
-docker compose logs merrick | grep "ERROR"
+# stdio transport (default)
+python -m mcp_server
+
+# via MCP CLI
+mcp run mcp_server/server.py
 ```
 
-**Common errors:**
-- `honcho.create_session` fails → session already exists (harmless, ignored)
-- `honcho.post_message` fails → Honcho API issue
-- Database constraint violations → check `sync_state` uniqueness
+### MCP Client Configuration
 
-### Dashboard Shows "error" for Counts
+Add to your MCP client config (e.g., `claude_desktop_config.json`):
 
-**Problem:** Stats show `"error"` instead of numbers.
-
-**Cause:** One subsystem is unreachable when the dashboard loads.
-
-**Fix:** Ensure both Supabase (5433) and Honcho (8000) are running. The dashboard will recover on the next auto-refresh (30 seconds).
-
-### Query Returns Empty Results
-
-**Problem:** Search finds nothing.
-
-**Causes:**
-- `memories` table is empty
-- Honcho peer search returns no results
-- Query doesn't match any full-text vectors
-
-**Test:**
-```bash
-# Direct mem0 search
-curl -X POST http://localhost:5001/api/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "user"}'
-
-# If still empty, check data exists
-psql -h localhost -p 5433 -U postgres -d postgres \
-  -c "SELECT id, payload->>'data' FROM memories LIMIT 5"
+```json
+{
+  "mcpServers": {
+    "merrick": {
+      "command": "python",
+      "args": ["-m", "mcp_server"]
+    }
+  }
+}
 ```
 
----
+## CLI
+
+Merrick includes a command-line interface via `merrick_cli`. Rich output with tables, panels, and color-coded status.
+
+### Commands
+
+```bash
+merrick status                          # Health check + counts
+merrick devices                         # List all provisioned devices
+merrick keys list                       # List all API keys
+merrick keys create                     # Create a new API key (interactive)
+merrick memory write "User likes Vim"   # Write a memory
+merrick memory search "dark mode"       # Search memories
+merrick memory export -o backup.json    # Export memories as JSON
+merrick sync                            # Trigger manual sync + show status
+merrick doctor                          # Diagnose connectivity issues
+```
+
+### Configuration
+
+```bash
+# Set server URL (default: http://localhost:5001)
+export MERRICK_URL=http://your-server:5001
+
+# Or pass via flag
+merrick --url http://your-server:5001 status
+```
+
+## Security
+
+- **API Key Auth** — Bearer token via `Authorization` header. Keys are SHA-256 hashed before storage. Raw key shown once at creation time. Format: `mk_` + 40 alphanumeric characters.
+- **Rate Limiting** — in-memory token bucket per API key. Configurable RPM (default: 60) and RPD (default: 10,000). Returns 429 with Retry-After header.
+- **Device Scoping** — each key is bound to a device. Writes are tracked per-device. Device-scoped search returns only that device's memories (opt-in via `device_filter: true`).
+- **Key Rotation** — revoke old key and create new atomically. `POST /api/keys/{key_id}/rotate`.
+- **Internal vs External** — `/api/*` routes are unauthenticated (dashboard/local). `/v1/*` routes require Bearer token auth. Network binding defaults to `0.0.0.0` for Docker, `127.0.0.1` for local dev.
+- **Security Headers** — CSP, HSTS, X-Content-Type-Options, X-Frame-Options, X-XSS-Protection.
+- **Path Traversal Protection** — proxy validates and URL-decodes paths before forwarding.
+- **Config Defaults** — passwords are always empty strings in defaults. Real values come from `.env` or database overrides.
 
 ## Project Structure
 
 ```
 merrick/
-├── app.py                  # FastAPI entrypoint, lifespan, CORS, routing
-├── config.py               # Environment variable loading
-├── database.py             # PostgreSQL connection helpers, schema init
-├── honcho.py               # Honcho HTTP client (sessions, messages, conclusions, search)
-├── sync.py                 # Sync engine (mem0→Honcho, Honcho→mem0, full sync)
-├── requirements.txt        # Python dependencies
-├── Dockerfile              # Container build definition
-├── docker-compose.yml      # Container orchestration
-├── .env                    # Configuration (not committed)
-├── .env.example            # Configuration template
-├── .gitignore              # Git ignore rules
-│
+├── app.py                      # FastAPI entrypoint (lifespan, CORS, router mount, health)
+├── config.py                   # Environment variable loading with safe defaults
+├── database.py                 # ThreadedConnectionPool, query helpers, init_schema()
+├── honcho.py                   # Honcho HTTP client (thread-safe singleton)
+├── sync.py                     # Bidirectional sync engine (mem0↔Honcho)
+├── dreaming.py                 # Memory compaction loop (dedup, contradictions, stale)
+├── provisioning.py             # Device auto-provisioning (Honcho peers + mem0 users)
+├── middleware/
+│   ├── __init__.py
+│   └── auth.py                 # API key validation, rate limiting, request logging
+├── mcp_server/
+│   ├── __init__.py
+│   ├── __main__.py             # python -m mcp_server entrypoint
+│   ├── server.py               # MCP tools + resources
+│   ├── client.py               # HTTP client for Merrick API
+│   └── config.py               # MCP server configuration
+├── merrick_cli/
+│   ├── __init__.py
+│   ├── main.py                 # Click CLI (status, devices, keys, memory, sync, doctor)
+│   ├── client.py               # HTTP client for CLI
+│   └── config.py               # CLI configuration
 ├── routes/
-│   ├── __init__.py         # (empty, makes routes a package)
-│   ├── sync.py             # POST /api/sync/trigger, GET /api/sync/status, GET /api/sync/log
-│   ├── query.py            # POST /api/query
-│   └── status.py           # GET /api/status
-│
+│   ├── __init__.py
+│   ├── sync.py                 # POST /api/sync/trigger, GET /api/sync/status, GET /api/sync/log
+│   ├── query.py                # POST /api/query (cross-system search)
+│   ├── status.py               # GET /api/status (dashboard stats)
+│   ├── memory.py               # POST /api/memory/write, POST /api/memory/reasoning
+│   ├── categories.py           # Category CRUD + memory assignment
+│   ├── webhooks.py             # Webhook CRUD + HMAC signing
+│   ├── analytics.py            # Usage tracking, timelines, breakdowns
+│   ├── export.py               # JSON/CSV/Markdown export + full backup
+│   ├── devices.py              # Device CRUD, peer mapping
+│   ├── keys.py                 # API key management (create, rotate, revoke)
+│   ├── agents.py               # Agent profile CRUD + scoped memory ops
+│   └── dreaming.py             # POST /api/dreaming/run, GET /api/dreaming/stats
 ├── schema/
-│   └── merrick.sql         # Database schema (sync_state, sync_log)
-│
-└── static/
-    ├── index.html          # SPA shell (dashboard, query, sync log tabs)
-    ├── style.css           # Dark theme CSS (655 lines)
-    └── app.js              # Frontend logic (443 lines)
+│   └── merrick.sql             # Reference DDL (sync_state, sync_log, all tables)
+├── static/
+│   ├── index.html              # SPA shell (dark theme)
+│   ├── style.css               # Dark theme CSS
+│   └── app.js                  # Frontend logic (tabs, API calls, rendering)
+├── docker-compose.yml          # Standalone: PostgreSQL + Merrick
+├── docker-compose.full.yml     # Full stack: PostgreSQL + Redis + Honcho + mem0 + Merrick
+├── Dockerfile                  # Container build (python:3.12-slim)
+├── requirements.txt            # Python dependencies
+├── pyproject.toml              # Package metadata + CLI entrypoint
+├── init-db.sh                  # PostgreSQL init script (pgvector extension)
+├── .env                        # Configuration (not committed)
+├── .env.example                # Configuration template
+├── .gitignore                  # Git ignore rules
+├── ARCHITECTURE.md             # Full v2 architecture documentation
+├── AGENT.md                    # AI agent guide (gotchas, conventions)
+├── DOCS.md                     # Developer documentation
+└── LICENSE                     # AGPL-3.0 License
 ```
-
-### File Responsibilities
-
-| File | Lines | Purpose |
-|------|-------|---------|
-| `app.py` | 73 | FastAPI app, background sync thread, lifespan management |
-| `config.py` | 17 | Loads all `MERRICK_*` environment variables with defaults |
-| `database.py` | 75 | `query_one`, `query_all`, `execute`, `init_schema` |
-| `honcho.py` | 77 | httpx client for Honcho v3 API |
-| `sync.py` | 163 | Core sync logic, fault-tolerant bidirectional sync |
-| `routes/sync.py` | 39 | Sync API endpoints |
-| `routes/query.py` | 54 | Cross-system search with deduplication |
-| `routes/status.py` | 50 | Dashboard statistics aggregation |
-| `static/index.html` | 146 | SPA HTML shell |
-| `static/style.css` | 655 | Dark theme, responsive design |
-| `static/app.js` | 443 | Tab switching, API calls, rendering |
-
-### Honcho API Endpoints Used
-
-| Endpoint | Method | Used In | Purpose |
-|----------|--------|---------|---------|
-| `/v3/workspaces/{ws}/sessions` | POST | `honcho.py` | Create session for mem0 imports |
-| `/v3/workspaces/{ws}/sessions/{id}/messages` | POST | `honcho.py` | Post mem0 facts as messages |
-| `/v3/workspaces/{ws}/conclusions/list` | POST | `honcho.py` | List Honcho conclusions |
-| `/v3/workspaces/{ws}/peers/{id}/search` | POST | `honcho.py` | Search peer data |
-| `/v3/workspaces/{ws}/sessions/list` | POST | `honcho.py` | List all sessions (for status) |
-
----
-
-## Contributing
-
-### Development Setup
-
-```bash
-# Clone
-git clone https://github.com/lovethatbrandx/merrick.git
-cd merrick
-
-# Set up Python environment
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-# Configure
-cp .env.example .env
-# Edit .env with your local Supabase/Honcho settings
-
-# Run
-python app.py
-```
-
-### Code Style
-
-- **Python:** Standard PEP 8 conventions
-- **Logging:** Use `logging.getLogger("merrick")` and sub-loggers (`merrick.sync`, `merrick.honcho`)
-- **Error handling:** Fail gracefully, log errors, don't crash the service
-- **Database:** Always use parameterized queries (never string interpolation)
-
-### Adding New Routes
-
-1. Create a new file in `routes/`
-2. Define an `APIRouter` with appropriate prefix and tags
-3. Import and include it in `app.py` via `app.include_router(new_router)`
-
-### Sync Engine Changes
-
-When modifying `sync.py`:
-- Each direction (`sync_mem0_to_honcho`, `sync_honcho_to_mem0`) must be independently fault-tolerant
-- Always record synced items in `sync_state` to prevent duplicates
-- Use `ON CONFLICT DO NOTHING` for idempotent inserts
-- Log meaningful messages at INFO and DEBUG levels
-
-### Testing
-
-```bash
-# Health check
-curl http://localhost:5001/api/health
-
-# Full status
-curl http://localhost:5001/api/status | python -m json.tool
-
-# Trigger sync and check results
-curl -X POST http://localhost:5001/api/sync/trigger
-sleep 5
-curl http://localhost:5001/api/sync/status | python -m json.tool
-
-# Search
-curl -X POST http://localhost:5001/api/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "test"}' | python -m json.tool
-```
-
----
 
 ## License
 
-MIT © 2026 BrandX
-
-See [LICENSE](LICENSE) for full terms.
+[AGPL-3.0](LICENSE) © 2026 BrandX
 
 ---
 
