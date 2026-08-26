@@ -3,4 +3,4 @@ __pycache__/
 .env
 data/
 logs/
-*.db
+*.dbHERMES_MIGRATION.md
