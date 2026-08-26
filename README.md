@@ -210,6 +210,68 @@ docker compose up -d
 | Full stack from scratch | **Docker full** — `docker-compose-full.yml` brings up everything |
 | CI/CD or automated deployments | **Docker** — reproducible, no manual setup steps |
 
+## Connecting Hermes Agent
+
+Hermes Agent has built-in memory providers (Honcho, mem0). Merrick sits in front of both — you get Honcho's deep reasoning AND mem0's vector search without choosing one.
+
+### First-Time Setup (Hermes not configured yet)
+
+1. **Install and start Merrick** (see Quick Start above)
+2. **Start Hermes setup** — when it asks "Configure a memory layer?" skip it
+3. **Set env vars** for Hermes to talk to Merrick:
+
+```bash
+export MERRICK_URL=http://localhost:5001
+export MERRICK_API_KEY=merrick_sk_your_key_here
+```
+
+4. **Create an API key** if you haven't:
+
+```bash
+curl -X POST http://localhost:5001/api/keys \
+  -H "Content-Type: application/json" \
+  -d '{"device_id": "hermes-main", "key_name": "hermes"}'
+```
+
+5. **Verify it works:**
+
+```bash
+curl -X POST http://localhost:5001/v1/memory/write \
+  -H "Authorization: Bearer merrick_sk_your_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Hermes connected to Merrick", "source": "hermes"}'
+```
+
+### Migrating from Existing Memory (Honcho or mem0 already configured)
+
+Merrick **replaces** the single backend in your Hermes config. It does **not** delete your existing memories — they stay in the original backend. Merrick reads from both automatically.
+
+1. **Merrick is already running** (you're here, so it is)
+2. **Update Hermes config** — point it at Merrick instead of Honcho/mem0 directly:
+
+```bash
+# Old (direct to Honcho)
+export HONCHO_BASE_URL=http://localhost:8000
+
+# New (through Merrick)
+export MERRICK_URL=http://localhost:5001
+export MERRICK_API_KEY=merrick_sk_your_key_here
+```
+
+3. **Restart Hermes**
+4. **Test** — ask Hermes to remember something, then search for it
+
+### What Happens to Existing Memories?
+
+They're safe. Merrick doesn't touch your old data. Once connected:
+- **Reads** pull from both Honcho and mem0 (deduplicated)
+- **Writes** go to both simultaneously
+- **Sync** keeps them consistent every 5 minutes
+
+### Does This Replace My Setup?
+
+Yes and no. It **replaces the config** (where Hermes points). It **does not replace your memories**. They're still in Honcho/mem0 — Merrick just gives you a unified front door to both.
+
 ## Architecture
 
 ```
