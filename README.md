@@ -513,7 +513,7 @@ merrick/
 
 ## License
 
-[AGPL-3.0](LICENSE) © 2026 BrandX
+[AGPL-3.0](LICENSE) © 2026 Brand X
 
 ---
 
