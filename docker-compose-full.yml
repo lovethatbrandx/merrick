@@ -157,7 +157,7 @@ services:
   # ── Merrick (Memory Bridge) ─────────────────────────────────────
   # Bridges Honcho and mem0
   merrick:
-    build: .
+    image: ghcr.io/lovethatbrandx/merrick:latest
     container_name: merrick
     ports:
       - "5001:5001"

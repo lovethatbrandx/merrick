@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Merrick — Dashboard</title>
   <link rel="stylesheet" href="./style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐘</text></svg>">
+  <link rel="icon" href="./merrick_logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15,7 +15,7 @@
     <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand">
-        <span class="brand-icon">🐘</span>
+        <img src="./merrick_logo.png" alt="Merrick" width="28" height="28">
         <span class="brand-text">Merrick</span>
       </div>
       <nav class="sidebar-nav">
@@ -62,8 +62,8 @@
         </div>
         <div class="topbar-right">
           <div class="status-badge" id="status-badge">
-            <div class="status-dot status-dot--sm status-dot--green"></div>
-            <span>All systems operational</span>
+            <div class="status-dot status-dot--sm status-dot--grey"></div>
+            <span>Checking…</span>
           </div>
         </div>
       </header>
@@ -79,34 +79,34 @@
             <div class="health-card" data-service="api">
               <div class="health-header">
                 <span class="health-name">API Server</span>
-                <div class="status-dot status-dot--sm status-dot--green"></div>
+                <div class="status-dot status-dot--sm status-dot--grey"></div>
               </div>
-              <div class="health-value">99.9%</div>
-              <div class="health-sub">uptime</div>
+              <div class="health-value">—</div>
+              <div class="health-sub">loading…</div>
             </div>
             <div class="health-card" data-service="db">
               <div class="health-header">
                 <span class="health-name">PostgreSQL</span>
-                <div class="status-dot status-dot--sm status-dot--green"></div>
+                <div class="status-dot status-dot--sm status-dot--grey"></div>
               </div>
-              <div class="health-value">Connected</div>
-              <div class="health-sub">5432 / merrick</div>
+              <div class="health-value">—</div>
+              <div class="health-sub">loading…</div>
             </div>
             <div class="health-card" data-service="honcho">
               <div class="health-header">
                 <span class="health-name">Honcho</span>
-                <div class="status-dot status-dot--sm status-dot--green"></div>
+                <div class="status-dot status-dot--sm status-dot--grey"></div>
               </div>
-              <div class="health-value">Connected</div>
-              <div class="health-sub">workspace: hermes</div>
+              <div class="health-value">—</div>
+              <div class="health-sub">loading…</div>
             </div>
             <div class="health-card" data-service="mem0">
               <div class="health-header">
                 <span class="health-name">mem0</span>
-                <div class="status-dot status-dot--sm status-dot--yellow"></div>
+                <div class="status-dot status-dot--sm status-dot--grey"></div>
               </div>
-              <div class="health-value">Degraded</div>
-              <div class="health-sub">latency 240ms</div>
+              <div class="health-value">—</div>
+              <div class="health-sub">loading…</div>
             </div>
           </div>
 
@@ -114,19 +114,19 @@
           <div class="section-label">At a Glance</div>
           <div class="stats-row" id="overview-stats">
             <div class="stat-card">
-              <div class="stat-value" id="stat-devices">7</div>
+              <div class="stat-value" id="stat-devices">—</div>
               <div class="stat-label">Devices</div>
             </div>
             <div class="stat-card">
-              <div class="stat-value" id="stat-memories">2,847</div>
+              <div class="stat-value" id="stat-memories">—</div>
               <div class="stat-label">Memories</div>
             </div>
             <div class="stat-card">
-              <div class="stat-value" id="stat-keys">12</div>
+              <div class="stat-value" id="stat-keys">—</div>
               <div class="stat-label">API Keys</div>
             </div>
             <div class="stat-card">
-              <div class="stat-value" id="stat-agents">4</div>
+              <div class="stat-value" id="stat-agents">—</div>
               <div class="stat-label">Agents</div>
             </div>
           </div>
@@ -161,7 +161,7 @@
                   <div class="qs-num">2</div>
                   <div class="qs-content">
                     <div class="qs-title">Connect your device</div>
-                    <div class="qs-desc">Point your app to <code class="mono">http://localhost:5001/v1/</code></div>
+                    <div class="qs-desc">Point your app to <code class="mono" id="api-base-url">/v1/</code></div>
                   </div>
                 </div>
                 <div class="qs-step">
@@ -200,7 +200,7 @@
             </table>
           </div>
 
-          <div class="section-label" style="margin-top: 32px;">API Keys</div>
+          <div class="section-label mt-8">API Keys</div>
           <div class="table-card">
             <table class="table">
               <thead>
@@ -243,10 +243,6 @@
                     <label class="form-label">Agent Slug</label>
                     <select class="form-select" id="key-agent">
                       <option value="">None (shared)</option>
-                      <option value="hombre">hombre</option>
-                      <option value="meredith">meredith</option>
-                      <option value="hermes">hermes</option>
-                      <option value="default">default</option>
                     </select>
                   </div>
                 </div>
@@ -323,9 +319,9 @@
           <div class="agent-detail hidden" id="agent-detail">
             <button class="btn btn--ghost btn--sm" id="btn-back-agents">← Back to agents</button>
             <div class="agent-detail-header" id="agent-detail-header"></div>
-            <div class="section-label" style="margin-top: 24px;">Memories</div>
+            <div class="section-label mt-6">Memories</div>
             <div class="memory-list" id="agent-memories"></div>
-            <div class="section-label" style="margin-top: 24px;">Assigned Devices</div>
+            <div class="section-label mt-6">Assigned Devices</div>
             <div class="device-chips" id="agent-devices"></div>
           </div>
 
@@ -388,15 +384,15 @@
               <div class="sync-card-body">
                 <div class="sync-stat">
                   <span class="sync-stat-label">Last sync</span>
-                  <span class="sync-stat-value mono" id="sync-last-h2m">2 min ago</span>
+                  <span class="sync-stat-value mono" id="sync-last-h2m">—</span>
                 </div>
                 <div class="sync-stat">
                   <span class="sync-stat-label">Items synced</span>
-                  <span class="sync-stat-value mono" id="sync-items-h2m">142</span>
+                  <span class="sync-stat-value mono" id="sync-items-h2m">—</span>
                 </div>
                 <div class="sync-stat">
                   <span class="sync-stat-label">Errors</span>
-                  <span class="sync-stat-value mono sync-stat-value--ok" id="sync-errors-h2m">0</span>
+                  <span class="sync-stat-value mono" id="sync-errors-h2m">—</span>
                 </div>
               </div>
             </div>
@@ -409,41 +405,22 @@
               <div class="sync-card-body">
                 <div class="sync-stat">
                   <span class="sync-stat-label">Last sync</span>
-                  <span class="sync-stat-value mono" id="sync-last-m2h">5 min ago</span>
+                  <span class="sync-stat-value mono" id="sync-last-m2h">—</span>
                 </div>
                 <div class="sync-stat">
                   <span class="sync-stat-label">Items synced</span>
-                  <span class="sync-stat-value mono" id="sync-items-m2h">89</span>
+                  <span class="sync-stat-value mono" id="sync-items-m2h">—</span>
                 </div>
                 <div class="sync-stat">
                   <span class="sync-stat-label">Errors</span>
-                  <span class="sync-stat-value mono sync-stat-value--warn" id="sync-errors-m2h">3</span>
-                </div>
-              </div>
-            </div>
-            <div class="sync-card sync-card--queue">
-              <div class="sync-card-header">
-                <span class="sync-source">Pending Queue</span>
-              </div>
-              <div class="sync-card-body">
-                <div class="sync-stat">
-                  <span class="sync-stat-label">Waiting</span>
-                  <span class="sync-stat-value mono" id="sync-pending">12</span>
-                </div>
-                <div class="sync-stat">
-                  <span class="sync-stat-label">Oldest</span>
-                  <span class="sync-stat-value mono" id="sync-oldest">3 min ago</span>
-                </div>
-                <div class="sync-stat">
-                  <span class="sync-stat-label">Sync status</span>
-                  <span class="sync-stat-value sync-stat-value--ok" id="sync-status-label">Idle</span>
+                  <span class="sync-stat-value mono" id="sync-errors-m2h">—</span>
                 </div>
               </div>
             </div>
           </div>
 
           <!-- Sync history -->
-          <div class="section-label" style="margin-top: 32px;">Sync History</div>
+          <div class="section-label mt-8">Sync History</div>
           <div class="table-card">
             <table class="table">
               <thead>
@@ -469,19 +446,19 @@
 
           <div class="stats-row" id="analytics-stats">
             <div class="stat-card">
-              <div class="stat-value" id="a-total">2,847</div>
+              <div class="stat-value" id="a-total">—</div>
               <div class="stat-label">Total Memories</div>
             </div>
             <div class="stat-card">
-              <div class="stat-value" id="a-today">23</div>
+              <div class="stat-value" id="a-today">—</div>
               <div class="stat-label">Created Today</div>
             </div>
             <div class="stat-card">
-              <div class="stat-value" id="a-week">156</div>
+              <div class="stat-value" id="a-week">—</div>
               <div class="stat-label">This Week</div>
             </div>
             <div class="stat-card">
-              <div class="stat-value" id="a-month">847</div>
+              <div class="stat-value" id="a-month">—</div>
               <div class="stat-label">This Month</div>
             </div>
           </div>
@@ -547,27 +524,27 @@
             <div class="settings-card">
               <div class="settings-group">
                 <label class="form-label">Honcho URL</label>
-                <input type="text" class="form-input mono" id="setting-honcho-url" value="http://host.docker.internal:8000">
+                <input type="text" class="form-input mono" id="setting-honcho-url" value="" placeholder="Loading…">
               </div>
               <div class="settings-group">
                 <label class="form-label">Honcho Workspace</label>
-                <input type="text" class="form-input mono" id="setting-honcho-workspace" value="hermes">
+                <input type="text" class="form-input mono" id="setting-honcho-workspace" value="" placeholder="Loading…">
               </div>
               <div class="settings-group">
                 <label class="form-label">Honcho User Peer</label>
-                <input type="text" class="form-input mono" id="setting-honcho-peer" value="ron">
+                <input type="text" class="form-input mono" id="setting-honcho-peer" value="" placeholder="Loading…">
               </div>
               <div class="settings-group">
                 <label class="form-label">mem0 API URL</label>
-                <input type="text" class="form-input mono" id="setting-mem0-url" value="http://host.docker.internal:8888">
+                <input type="text" class="form-input mono" id="setting-mem0-url" value="" placeholder="Loading…">
               </div>
               <div class="settings-group">
                 <label class="form-label">Sync Interval (seconds)</label>
-                <input type="number" class="form-input" id="setting-sync-interval" value="300" min="30" max="3600">
+                <input type="number" class="form-input" id="setting-sync-interval" value="" placeholder="Loading…" min="30" max="3600">
               </div>
               <div class="settings-group">
                 <label class="form-label">Sync Enabled</label>
-                <label class="toggle"><input type="checkbox" id="setting-sync-enabled" checked> Enable background sync</label>
+                <label class="toggle"><input type="checkbox" id="setting-sync-enabled"> Enable background sync</label>
               </div>
               <div class="settings-actions">
                 <button class="btn btn--primary" id="btn-save-settings">Save Settings</button>
@@ -593,21 +570,13 @@
               </div>
               <div class="settings-group">
                 <label class="form-label">Raw Config</label>
-                <pre class="config-json mono" id="config-raw">{
-  "DB_HOST": "host.docker.internal",
-  "DB_PORT": 5433,
-  "HONCHO_URL": "http://host.docker.internal:8000",
-  "HONCHO_WORKSPACE": "hermes",
-  "MEM0_API_URL": "http://host.docker.internal:8888",
-  "SYNC_INTERVAL": 300,
-  "SYNC_ENABLED": true
-}</pre>
+                <pre class="config-json mono" id="config-raw">Loading…</pre>
               </div>
               <div class="settings-group">
                 <label class="form-label">Database Connection</label>
                 <div class="connection-status">
-                  <div class="status-dot status-dot--sm status-dot--green"></div>
-                  <span>Connected to PostgreSQL 5433 / merrick</span>
+                  <div class="status-dot status-dot--sm status-dot--grey"></div>
+                  <span>Checking connection…</span>
                 </div>
               </div>
             </div>
@@ -618,18 +587,12 @@
             <div class="settings-card settings-card--danger">
               <div class="settings-group">
                 <label class="form-label">Purge Old Memories</label>
-                <p class="form-hint">Remove memories older than a specified number of days. This cannot be undone.</p>
-                <div class="danger-action">
-                  <input type="number" class="form-input" value="90" min="1" max="3650" style="width: 100px;">
-                  <span class="form-hint-inline">days</span>
-                  <button class="btn btn--danger">Purge</button>
-                </div>
+                <p class="form-hint">Remove memories older than a specified number of days. This feature is not yet implemented.</p>
               </div>
               <div class="settings-divider"></div>
               <div class="settings-group">
                 <label class="form-label">Reset All Data</label>
-                <p class="form-hint">Delete all memories, devices, keys, and agent profiles. This is irreversible.</p>
-                <button class="btn btn--danger" id="btn-reset-data">Reset Everything</button>
+                <p class="form-hint">This feature is not yet implemented.</p>
               </div>
             </div>
           </div>

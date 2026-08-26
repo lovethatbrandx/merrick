@@ -2,169 +2,36 @@
    MERRICK DASHBOARD — Application Logic
    ═══════════════════════════════════════════════════════
    Single-page app backed by the Merrick REST API.
-   Falls back to embedded mock data when the API is
-   unreachable so the dashboard always looks functional.
+   Shows empty states when the API is unreachable.
    ═══════════════════════════════════════════════════════ */
 
 (function() {
   'use strict';
 
-  // ── Mock Data (fallback) ──────────────────────────────
-
-  const MOCK = {
-    health: {
-      api: { status: 'healthy', uptime: '99.9%' },
-      db:  { status: 'healthy', host: 'localhost:5433', name: 'merrick' },
-      honcho: { status: 'healthy', workspace: 'hermes', url: 'http://host.docker.internal:8000' },
-      mem0: { status: 'degraded', latency: 240, url: 'http://host.docker.internal:8888' },
-    },
-
-    stats: {
-      devices: 7,
-      memories: 2847,
-      keys: 12,
-      agents: 4,
-    },
-
-    devices: [
-      { device_id: 'hermes-phone', honcho_peer_id: 'device_hermes-phone', mem0_user_id: 'device_hermes-phone', provisioned_at: '2026-06-10T14:22:00Z', last_seen_at: '2026-07-15T08:30:00Z', metadata: { platform: 'android' } },
-      { device_id: 'hermes-laptop', honcho_peer_id: 'device_hermes-laptop', mem0_user_id: 'device_hermes-laptop', provisioned_at: '2026-06-12T09:15:00Z', last_seen_at: '2026-07-15T09:12:00Z', metadata: { platform: 'macos' } },
-      { device_id: 'meredith-phone', honcho_peer_id: 'device_meredith-phone', mem0_user_id: 'device_meredith-phone', provisioned_at: '2026-06-15T16:40:00Z', last_seen_at: '2026-07-14T22:05:00Z', metadata: { platform: 'ios' } },
-      { device_id: 'desktop-workstation', honcho_peer_id: 'device_desktop-workstation', mem0_user_id: 'device_desktop-workstation', provisioned_at: '2026-06-18T11:00:00Z', last_seen_at: '2026-07-15T07:45:00Z', metadata: { platform: 'linux' } },
-      { device_id: 'code-editor-vscode', honcho_peer_id: 'device_code-editor-vscode', mem0_user_id: 'device_code-editor-vscode', provisioned_at: '2026-06-20T13:20:00Z', last_seen_at: '2026-07-15T08:58:00Z', metadata: { platform: 'vscode' } },
-      { device_id: 'tablet-ipad', honcho_peer_id: 'device_tablet-ipad', mem0_user_id: 'device_tablet-ipad', provisioned_at: '2026-06-25T10:10:00Z', last_seen_at: '2026-07-13T18:30:00Z', metadata: { platform: 'ipados' } },
-      { device_id: 'raspberry-pi', honcho_peer_id: 'device_raspberry-pi', mem0_user_id: 'device_raspberry-pi', provisioned_at: '2026-07-01T08:00:00Z', last_seen_at: '2026-07-15T06:00:00Z', metadata: { platform: 'linux' } },
-    ],
-
-    keys: [
-      { id: 'a1b2c3d4', key_name: 'hermes-phone-prod', key_prefix: 'merrick_sk_aB3k...x9Qz', device_id: 'hermes-phone', agent_slug: 'hombre', permissions: ['read','write'], rate_limit: 100, last_used_at: '2026-07-15T08:30:00Z', active: true, memory_categories: ['general','preferences'], max_memory_tokens: 2000 },
-      { id: 'e5f6g7h8', key_name: 'laptop-dev', key_prefix: 'merrick_sk_tC7m...p2Rw', device_id: 'hermes-laptop', agent_slug: 'hermes', permissions: ['read','write'], rate_limit: 200, last_used_at: '2026-07-15T09:12:00Z', active: true, memory_categories: ['general','facts','tasks'], max_memory_tokens: 5000 },
-      { id: 'i9j0k1l2', key_name: 'meredith-readonly', key_prefix: 'merrick_sk_dF4n...s6Uv', device_id: 'meredith-phone', agent_slug: 'meredith', permissions: ['read'], rate_limit: 50, last_used_at: '2026-07-14T22:05:00Z', active: true, memory_categories: ['general'], max_memory_tokens: 1000 },
-      { id: 'm3n4o5p6', key_name: 'vscode-agent', key_prefix: 'merrick_sk_gH8q...w1Xy', device_id: 'code-editor-vscode', agent_slug: null, permissions: ['read','write'], rate_limit: 150, last_used_at: '2026-07-15T08:58:00Z', active: true, memory_categories: ['general','facts','context'], max_memory_tokens: 3000 },
-      { id: 'q7r8s9t0', key_name: 'old-test-key', key_prefix: 'merrick_sk_jK2t...z4Ab', device_id: 'hermes-phone', agent_slug: 'default', permissions: ['read'], rate_limit: 10, last_used_at: '2026-06-20T12:00:00Z', active: false, memory_categories: ['general'], max_memory_tokens: 500 },
-      { id: 'u1v2w3x4', key_name: 'pi-sensor', key_prefix: 'merrick_sk_mN6v...c8De', device_id: 'raspberry-pi', agent_slug: null, permissions: ['read','write'], rate_limit: 300, last_used_at: '2026-07-15T06:00:00Z', active: true, memory_categories: ['facts','context'], max_memory_tokens: 8000 },
-    ],
-
-    agents: [
-      {
-        id: 'p1', name: 'Hombre', slug: 'hombre',
-        system_prompt: 'You are Hombre, a memory-focused AI assistant. You help users remember important things, track tasks, and maintain context across sessions. You are precise, concise, and always honest about what you do and don\'t know.',
-        memory_scope: 'shared', memory_count: 847, device_count: 3,
-        created_at: '2026-06-10T14:22:00Z',
-      },
-      {
-        id: 'p2', name: 'Meredith', slug: 'meredith',
-        system_prompt: 'You are Meredith, a creative writing assistant with deep memory. You remember character details, plot threads, world-building rules, and stylistic preferences across writing sessions.',
-        memory_scope: 'agent_only', memory_count: 423, device_count: 1,
-        created_at: '2026-06-15T16:40:00Z',
-      },
-      {
-        id: 'p3', name: 'Hermes', slug: 'hermes',
-        system_prompt: 'You are Hermes, a general-purpose AI agent. You handle scheduling, reminders, research, and general knowledge queries. You maintain context about user preferences, work habits, and ongoing projects.',
-        memory_scope: 'shared', memory_count: 1204, device_count: 4,
-        created_at: '2026-06-12T09:15:00Z',
-      },
-      {
-        id: 'p4', name: 'Default', slug: 'default',
-        system_prompt: 'You are a helpful AI assistant with persistent memory. You remember user preferences, facts they share, and context from previous conversations.',
-        memory_scope: 'shared', memory_count: 373, device_count: 2,
-        created_at: '2026-05-01T00:00:00Z',
-      },
-    ],
-
-    activity: [
-      { text: 'Wrote memory: <span class="mono">project_deadline_july</span>', device: 'hermes-laptop', time: '2 min ago' },
-      { text: 'Read 12 memories for context', device: 'code-editor-vscode', time: '5 min ago' },
-      { text: 'Wrote memory: <span class="mono">user_pref_dark_mode</span>', device: 'hermes-phone', time: '8 min ago' },
-      { text: 'Synced Honcho → mem0 (14 items)', device: 'system', time: '12 min ago' },
-      { text: 'Wrote memory: <span class="mono">meeting_notes_standup</span>', device: 'desktop-workstation', time: '18 min ago' },
-      { text: 'Agent "Hombre" accessed shared memories', device: 'hermes-phone', time: '22 min ago' },
-      { text: 'Wrote memory: <span class="mono">code_review_feedback</span>', device: 'code-editor-vscode', time: '30 min ago' },
-      { text: 'Rotated API key for tablet-ipad', device: 'system', time: '45 min ago' },
-      { text: 'Wrote memory: <span class="mono">recipe_pasta_aglio</span>', device: 'meredith-phone', time: '1 hr ago' },
-      { text: 'Sync completed: 89 items, 3 errors', device: 'system', time: '1.5 hr ago' },
-    ],
-
-    syncLog: [
-      { time: '2026-07-15 09:12', direction: 'honcho_to_mem0', items: 14, errors: 0, duration: '1.2s', status: 'completed' },
-      { time: '2026-07-15 09:07', direction: 'mem0_to_honcho', items: 8, errors: 0, duration: '0.8s', status: 'completed' },
-      { time: '2026-07-15 09:02', direction: 'honcho_to_mem0', items: 22, errors: 1, duration: '3.1s', status: 'completed_with_errors' },
-      { time: '2026-07-15 08:57', direction: 'mem0_to_honcho', items: 5, errors: 0, duration: '0.4s', status: 'completed' },
-      { time: '2026-07-15 08:52', direction: 'honcho_to_mem0', items: 31, errors: 0, duration: '2.5s', status: 'completed' },
-      { time: '2026-07-15 08:47', direction: 'mem0_to_honcho', items: 12, errors: 2, duration: '4.7s', status: 'completed_with_errors' },
-      { time: '2026-07-15 08:42', direction: 'honcho_to_mem0', items: 18, errors: 0, duration: '1.6s', status: 'completed' },
-      { time: '2026-07-15 08:37', direction: 'mem0_to_honcho', items: 9, errors: 0, duration: '0.6s', status: 'completed' },
-    ],
-
-    analytics: {
-      total_memories: 2847,
-      memories_today: 23,
-      memories_this_week: 156,
-      memories_this_month: 847,
-      total_categories: 6,
-      total_webhooks: 2,
-      timeline: [
-        { date: '2026-06-16', count: 12 }, { date: '2026-06-17', count: 18 },
-        { date: '2026-06-18', count: 25 }, { date: '2026-06-19', count: 14 },
-        { date: '2026-06-20', count: 32 }, { date: '2026-06-21', count: 8 },
-        { date: '2026-06-22', count: 5 }, { date: '2026-06-23', count: 21 },
-        { date: '2026-06-24', count: 28 }, { date: '2026-06-25', count: 19 },
-        { date: '2026-06-26', count: 35 }, { date: '2026-06-27', count: 22 },
-        { date: '2026-06-28', count: 15 }, { date: '2026-06-29', count: 10 },
-        { date: '2026-06-30', count: 27 }, { date: '2026-07-01', count: 30 },
-        { date: '2026-07-02', count: 16 }, { date: '2026-07-03', count: 23 },
-        { date: '2026-07-04', count: 11 }, { date: '2026-07-05', count: 7 },
-        { date: '2026-07-06', count: 13 }, { date: '2026-07-07', count: 29 },
-        { date: '2026-07-08', count: 38 }, { date: '2026-07-09', count: 20 },
-        { date: '2026-07-10', count: 26 }, { date: '2026-07-11', count: 31 },
-        { date: '2026-07-12', count: 18 }, { date: '2026-07-13', count: 14 },
-        { date: '2026-07-14', count: 22 }, { date: '2026-07-15', count: 23 },
-      ],
-      device_activity: [
-        { device: 'hermes-laptop', count: 842 },
-        { device: 'hermes-phone', count: 631 },
-        { device: 'code-editor-vscode', count: 498 },
-        { device: 'desktop-workstation', count: 412 },
-        { device: 'meredith-phone', count: 256 },
-        { device: 'raspberry-pi', count: 134 },
-        { device: 'tablet-ipad', count: 74 },
-      ],
-      categories: [
-        { name: 'general', color: '#388bfd', count: 892 },
-        { name: 'preferences', color: '#3fb950', count: 654 },
-        { name: 'facts', color: '#d29922', count: 523 },
-        { name: 'tasks', color: '#f85149', count: 387 },
-        { name: 'context', color: '#a371f7', count: 268 },
-        { name: 'relationships', color: '#f778ba', count: 123 },
-      ],
-      key_usage: [
-        { key: 'hermes-phone-prod', count: 1247 },
-        { key: 'laptop-dev', count: 982 },
-        { key: 'vscode-agent', count: 634 },
-        { key: 'pi-sensor', count: 421 },
-        { key: 'meredith-readonly', count: 287 },
-        { key: 'old-test-key', count: 12 },
-      ],
-    },
-
-    settings: {
-      honcho_url: 'http://host.docker.internal:8000',
-      honcho_workspace: 'hermes',
-      honcho_user_peer: 'ron',
-      mem0_api_url: 'http://host.docker.internal:8888',
-      sync_interval: 300,
-      sync_enabled: true,
-    },
-  };
-
   // ── Live Data Store ──────────────────────────────────
-  // Initially seeded from MOCK so every render call has
-  // data even if the API hasn't responded yet.
 
-  const DATA = JSON.parse(JSON.stringify(MOCK));
-
-  // Track which data sources came from mock vs live
-  const LIVE_SOURCES = {};
+  const DATA = {
+    health: null,
+    stats: { devices: 0, memories: 0, keys: 0, agents: 0 },
+    devices: [],
+    keys: [],
+    agents: [],
+    activity: [],
+    syncLog: [],
+    analytics: {
+      total_memories: 0,
+      memories_today: 0,
+      memories_this_week: 0,
+      memories_this_month: 0,
+      total_categories: 0,
+      total_webhooks: 0,
+      timeline: [],
+      device_activity: [],
+      categories: [],
+      key_usage: [],
+    },
+    settings: {},
+  };
 
   // ── Helpers ──────────────────────────────────────────
 
@@ -184,6 +51,7 @@
   }
 
   function formatNumber(n) {
+    if (n == null) return '—';
     return n.toLocaleString();
   }
 
@@ -210,7 +78,6 @@
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await res.json();
     } catch (err) {
-      console.warn(`[Merrick API] ${path} failed:`, err.message);
       return null;
     }
   }
@@ -223,8 +90,6 @@
       updateGlobalStatus('degraded', 'API unreachable');
       return;
     }
-
-    LIVE_SOURCES.status = true;
 
     // The /api/status endpoint returns a flat object. Map it
     // into the structure the UI expects.
@@ -242,9 +107,9 @@
       const devices = await apiFetch('/api/devices');
       const keys    = await apiFetch('/api/keys');
       const agents  = await apiFetch('/api/agents');
-      if (devices) DATA.stats.devices = Array.isArray(devices) ? devices.length : (DATA.devices || []).length;
-      if (keys)    DATA.stats.keys    = Array.isArray(keys)    ? keys.length    : (DATA.keys    || []).length;
-      if (agents)  DATA.stats.agents  = Array.isArray(agents)  ? agents.length  : (DATA.agents  || []).length;
+      if (devices) DATA.stats.devices = Array.isArray(devices) ? devices.length : DATA.devices.length;
+      if (keys)    DATA.stats.keys    = Array.isArray(keys)    ? keys.length    : DATA.keys.length;
+      if (agents)  DATA.stats.agents  = Array.isArray(agents)  ? agents.length  : DATA.agents.length;
     }
 
     // Determine global health
@@ -265,6 +130,57 @@
 
     renderOverviewStats();
     renderHealthCards();
+
+    // Populate developer config from status data
+    const configRaw = $('#config-raw');
+    if (configRaw && data) {
+      const config = {
+        DB_HOST: data.db_host || 'unknown',
+        DB_PORT: data.db_port || 'unknown',
+        HONCHO_URL: data.honcho_url || 'unknown',
+        HONCHO_WORKSPACE: data.honcho_workspace || 'unknown',
+        MEM0_API_URL: data.mem0_api_url || 'unknown',
+        SYNC_INTERVAL: data.sync_interval || 'unknown',
+        SYNC_ENABLED: data.sync_enabled !== undefined ? data.sync_enabled : 'unknown',
+      };
+      configRaw.textContent = JSON.stringify(config, null, 2);
+    }
+
+    // Update connection status from health data
+    const connStatus = $('.connection-status');
+    if (connStatus && data.health && data.health.db) {
+      const dbHealth = data.health.db;
+      const dot = connStatus.querySelector('.status-dot');
+      const text = connStatus.querySelector('span');
+      if (dot) {
+        dot.className = `status-dot status-dot--sm status-dot--${dbHealth.status === 'healthy' ? 'green' : 'red'}`;
+      }
+      if (text) {
+        text.textContent = dbHealth.status === 'healthy'
+          ? `Connected to PostgreSQL ${dbHealth.host || ''} / ${dbHealth.name || ''}`
+          : 'Database connection error';
+      }
+    }
+
+    // Populate settings form from status data
+    const settingsFields = {
+      'setting-honcho-url': data.honcho_url,
+      'setting-honcho-workspace': data.honcho_workspace,
+      'setting-honcho-peer': data.honcho_user_peer,
+      'setting-mem0-url': data.mem0_api_url,
+      'setting-sync-interval': data.sync_interval,
+    };
+    Object.entries(settingsFields).forEach(([id, value]) => {
+      const el = $(`#${id}`);
+      if (el && value !== undefined) {
+        el.value = value;
+      }
+    });
+
+    const syncEnabled = $('#setting-sync-enabled');
+    if (syncEnabled && data.sync_enabled !== undefined) {
+      syncEnabled.checked = data.sync_enabled;
+    }
   }
 
   function updateGlobalStatus(color, text) {
@@ -286,7 +202,6 @@
   async function fetchDevices() {
     const data = await apiFetch('/api/devices');
     if (data && Array.isArray(data)) {
-      LIVE_SOURCES.devices = true;
       DATA.devices = data;
     }
     renderDevices();
@@ -297,7 +212,6 @@
   async function fetchKeys() {
     const data = await apiFetch('/api/keys');
     if (data && Array.isArray(data)) {
-      LIVE_SOURCES.keys = true;
       DATA.keys = data;
     }
     renderKeys();
@@ -308,18 +222,32 @@
   async function fetchAgents() {
     const data = await apiFetch('/api/agents');
     if (data && Array.isArray(data)) {
-      LIVE_SOURCES.agents = true;
       DATA.agents = data;
     }
     renderAgents();
+    populateAgentDropdown();
   }
 
   // ── Sync Log ─────────────────────────────────────────
 
+  function populateAgentDropdown() {
+    const select = $('#key-agent');
+    if (!select) return;
+    const current = select.value;
+    // Keep the default option, replace the rest
+    select.innerHTML = '<option value="">None (shared)</option>';
+    DATA.agents.forEach(a => {
+      const opt = document.createElement('option');
+      opt.value = a.slug;
+      opt.textContent = `${a.name} (${a.slug})`;
+      select.appendChild(opt);
+    });
+    if (current) select.value = current;
+  }
+
   async function fetchSyncLog() {
     const data = await apiFetch('/api/sync/log');
     if (data && Array.isArray(data)) {
-      LIVE_SOURCES.syncLog = true;
       DATA.syncLog = data;
     }
     renderSyncLog();
@@ -336,24 +264,22 @@
     ]);
 
     if (overview) {
-      LIVE_SOURCES.analyticsOverview = true;
       Object.assign(DATA.analytics, overview);
     }
     if (timeline && Array.isArray(timeline)) {
-      LIVE_SOURCES.analyticsTimeline = true;
       DATA.analytics.timeline = timeline;
     }
     if (devices && Array.isArray(devices)) {
-      LIVE_SOURCES.analyticsDevices = true;
       DATA.analytics.device_activity = devices;
     }
     if (categories && Array.isArray(categories)) {
-      LIVE_SOURCES.analyticsCategories = true;
       DATA.analytics.categories = categories;
     }
 
     renderOverviewStats();
-    if ($('.page[data-page="analytics"]').classList.contains('active')) {
+    renderAnalyticsStats();
+    const analyticsPage = $('.page[data-page="analytics"]');
+    if (analyticsPage && analyticsPage.classList.contains('active')) {
       renderCharts();
     }
   }
@@ -361,10 +287,8 @@
   // ── Activity (derived from sync log) ─────────────────
 
   async function fetchActivity() {
-    // The API doesn't have a dedicated /api/activity endpoint.
-    // Build a synthetic activity feed from the latest sync log
-    // entries. If sync log is fresh, derive; otherwise keep mock.
-    if (LIVE_SOURCES.syncLog && DATA.syncLog.length > 0) {
+    // Build activity feed from the latest sync log entries.
+    if (DATA.syncLog.length > 0) {
       DATA.activity = DATA.syncLog.slice(0, 10).map(s => ({
         text: s.direction === 'honcho_to_mem0'
           ? `Synced Honcho → mem0 (<span class="mono">${s.items} items</span>)`
@@ -388,6 +312,18 @@
     if (m) m.textContent = formatNumber(s.memories);
     if (k) k.textContent = formatNumber(s.keys);
     if (a) a.textContent = formatNumber(s.agents);
+  }
+
+  function renderAnalyticsStats() {
+    const a = DATA.analytics;
+    const total = $('#a-total');
+    const today = $('#a-today');
+    const week = $('#a-week');
+    const month = $('#a-month');
+    if (total) total.textContent = formatNumber(a.total_memories);
+    if (today) today.textContent = formatNumber(a.memories_today);
+    if (week) week.textContent = formatNumber(a.memories_this_week);
+    if (month) month.textContent = formatNumber(a.memories_this_month);
   }
 
   function renderHealthCards() {
@@ -417,6 +353,7 @@
 
   function renderActivity() {
     const list = $('#activity-list');
+    if (!list) return;
     list.innerHTML = DATA.activity.map(a => `
       <div class="activity-item">
         <div class="activity-dot"></div>
@@ -430,6 +367,7 @@
 
   function renderDevices() {
     const tbody = $('#devices-table-body');
+    if (!tbody) return;
     tbody.innerHTML = DATA.devices.map(d => {
       const lastSeen = relativeTime(d.last_seen_at);
       const isActive = (Date.now() - new Date(d.last_seen_at).getTime()) < 3600000;
@@ -449,6 +387,7 @@
 
   function renderKeys() {
     const tbody = $('#keys-table-body');
+    if (!tbody) return;
     tbody.innerHTML = DATA.keys.map(k => `
       <tr>
         <td><strong>${k.key_name}</strong></td>
@@ -477,6 +416,7 @@
 
   function renderAgents() {
     const grid = $('#agent-grid');
+    if (!grid) return;
     grid.innerHTML = DATA.agents.map(a => `
       <div class="agent-card" onclick="App.showAgent('${a.slug}')">
         <div class="agent-card-name">${a.name}</div>
@@ -537,13 +477,12 @@
         source_device: m.source_device || m.device_id || '—',
       }));
     } else {
-      // Fallback: mock memories
-      memories = [
-        { content: 'User prefers dark mode in all applications', category: 'preferences', created_at: '2026-07-15T08:00:00Z', source_device: 'hermes-phone' },
-        { content: 'Project deadline moved to July 25th', category: 'tasks', created_at: '2026-07-15T07:30:00Z', source_device: 'hermes-laptop' },
-        { content: 'Database migration completed successfully', category: 'facts', created_at: '2026-07-14T16:00:00Z', source_device: 'code-editor-vscode' },
-        { content: 'Weekly standup happens every Tuesday at 10am', category: 'context', created_at: '2026-07-14T09:00:00Z', source_device: 'desktop-workstation' },
-      ];
+      memories = [];
+    }
+
+    if (memories.length === 0) {
+      memoriesEl.innerHTML = '<div class="text-muted" style="padding:12px">No memories found</div>';
+      return;
     }
 
     memoriesEl.innerHTML = memories.map(m => `
@@ -562,8 +501,9 @@
 
   function renderSyncLog() {
     const tbody = $('#sync-log-body');
+    if (!tbody) return;
     tbody.innerHTML = DATA.syncLog.map(s => {
-      const statusClass = s.status === 'completed' ? 'green' : s.errors > 0 ? 'yellow' : 'green';
+      const statusClass = s.errors > 0 ? 'yellow' : 'green';
       return `
         <tr>
           <td><span class="mono">${s.time}</span></td>
@@ -586,22 +526,26 @@
     const h2m = DATA.syncLog.find(s => s.direction === 'honcho_to_mem0');
     const m2h = DATA.syncLog.find(s => s.direction === 'mem0_to_honcho');
 
-    const el = (id) => document.getElementById(id);
-
     if (h2m) {
-      if (el('sync-last-h2m'))  el('sync-last-h2m').textContent  = relativeTime(h2m.time);
-      if (el('sync-items-h2m')) el('sync-items-h2m').textContent = h2m.items;
-      if (el('sync-errors-h2m')) {
-        el('sync-errors-h2m').textContent = h2m.errors;
-        el('sync-errors-h2m').className = `sync-stat-value mono sync-stat-value--${h2m.errors > 0 ? 'warn' : 'ok'}`;
+      const lastH2m = $('#sync-last-h2m');
+      const itemsH2m = $('#sync-items-h2m');
+      const errorsH2m = $('#sync-errors-h2m');
+      if (lastH2m) lastH2m.textContent = relativeTime(h2m.time);
+      if (itemsH2m) itemsH2m.textContent = h2m.items;
+      if (errorsH2m) {
+        errorsH2m.textContent = h2m.errors;
+        errorsH2m.className = `sync-stat-value mono sync-stat-value--${h2m.errors > 0 ? 'warn' : 'ok'}`;
       }
     }
     if (m2h) {
-      if (el('sync-last-m2h'))  el('sync-last-m2h').textContent  = relativeTime(m2h.time);
-      if (el('sync-items-m2h')) el('sync-items-m2h').textContent = m2h.items;
-      if (el('sync-errors-m2h')) {
-        el('sync-errors-m2h').textContent = m2h.errors;
-        el('sync-errors-m2h').className = `sync-stat-value mono sync-stat-value--${m2h.errors > 0 ? 'warn' : 'ok'}`;
+      const lastM2h = $('#sync-last-m2h');
+      const itemsM2h = $('#sync-items-m2h');
+      const errorsM2h = $('#sync-errors-m2h');
+      if (lastM2h) lastM2h.textContent = relativeTime(m2h.time);
+      if (itemsM2h) itemsM2h.textContent = m2h.items;
+      if (errorsM2h) {
+        errorsM2h.textContent = m2h.errors;
+        errorsM2h.className = `sync-stat-value mono sync-stat-value--${m2h.errors > 0 ? 'warn' : 'ok'}`;
       }
     }
   }
@@ -618,6 +562,8 @@
   function renderGrowthChart() {
     const canvas = $('#canvas-growth');
     if (!canvas) return;
+    const data = DATA.analytics.timeline;
+    if (!data || data.length === 0) return;
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.parentElement.getBoundingClientRect();
@@ -627,7 +573,6 @@
     canvas.style.height = '200px';
     ctx.scale(dpr, dpr);
 
-    const data = DATA.analytics.timeline;
     const w = rect.width;
     const h = 200;
     const pad = { top: 20, right: 20, bottom: 30, left: 50 };
@@ -711,6 +656,8 @@
   function renderDeviceChart() {
     const canvas = $('#canvas-devices');
     if (!canvas) return;
+    const data = DATA.analytics.device_activity;
+    if (!data || data.length === 0) return;
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.parentElement.getBoundingClientRect();
@@ -720,7 +667,6 @@
     canvas.style.height = '200px';
     ctx.scale(dpr, dpr);
 
-    const data = DATA.analytics.device_activity;
     const w = rect.width;
     const h = 200;
     const pad = { top: 20, right: 20, bottom: 60, left: 50 };
@@ -787,6 +733,8 @@
   function renderCategoryChart() {
     const canvas = $('#canvas-categories');
     if (!canvas) return;
+    const data = DATA.analytics.categories;
+    if (!data || data.length === 0) return;
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
     canvas.width = 260 * dpr;
@@ -795,7 +743,6 @@
     canvas.style.height = '260px';
     ctx.scale(dpr, dpr);
 
-    const data = DATA.analytics.categories;
     const total = data.reduce((s, d) => s + d.count, 0);
     const cx = 130, cy = 130, r = 100, inner = 60;
 
@@ -836,6 +783,8 @@
   function renderKeyUsageChart() {
     const canvas = $('#canvas-key-usage');
     if (!canvas) return;
+    const data = DATA.analytics.key_usage;
+    if (!data || data.length === 0) return;
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.parentElement.getBoundingClientRect();
@@ -845,7 +794,6 @@
     canvas.style.height = '200px';
     ctx.scale(dpr, dpr);
 
-    const data = DATA.analytics.key_usage;
     const w = rect.width;
     const h = 200;
     const pad = { top: 20, right: 20, bottom: 30, left: 50 };
@@ -966,15 +914,11 @@
       closeModal('modal-key-create');
       openModal('modal-secret-reveal');
       toast(`Key "${name}" created`, 'success');
-      // Refresh keys list
       fetchKeys();
     } else if (res) {
-      // API accepted but no secret returned (show placeholder)
-      const secret = res.key_prefix || `merrick_sk_${Array.from({length: 40}, () => 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-'[Math.floor(Math.random() * 64)]).join('')}`;
-      $('#secret-value').textContent = secret;
+      // API accepted but no secret returned
       closeModal('modal-key-create');
-      openModal('modal-secret-reveal');
-      toast(`Key "${name}" created`, 'success');
+      toast(`Key "${name}" created — copy the key from the keys list`, 'success');
       fetchKeys();
     } else {
       toast('Failed to create key — API unreachable', 'error');
@@ -1037,15 +981,20 @@
   async function rotateKey(id) {
     const key = DATA.keys.find(k => k.id === id);
     if (!key) return;
+    if (!confirm(`Rotate key "${key.key_name}"? The old key will be revoked immediately.`)) return;
 
-    // For now, rotate is a client-side action unless the API
-    // supports it. Show the modal with a generated secret.
-    const newSecret = `merrick_sk_${Array.from({length: 40}, () => 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-'[Math.floor(Math.random() * 64)]).join('')}`;
-    key.key_prefix = newSecret.slice(0, 20) + '...';
-    $('#secret-value').textContent = newSecret;
-    openModal('modal-secret-reveal');
-    renderKeys();
-    toast(`Key "${key.key_name}" rotated`, 'success');
+    const res = await apiFetch(`/api/keys/${id}/rotate`, { method: 'POST' });
+
+    if (res) {
+      if (res.key) {
+        $('#secret-value').textContent = res.key;
+        openModal('modal-secret-reveal');
+      }
+      toast(`Key "${key.key_name}" rotated`, 'success');
+      fetchKeys();
+    } else {
+      toast('Failed to rotate key — API unreachable', 'error');
+    }
   }
 
   async function revokeKey(id) {
@@ -1053,11 +1002,14 @@
     if (!key) return;
     if (!confirm(`Revoke key "${key.key_name}"? This cannot be undone.`)) return;
 
-    // Mark locally and re-render immediately for responsiveness.
-    // A real revoke endpoint would be: DELETE /api/keys/:id
-    key.active = false;
-    renderKeys();
-    toast(`Key "${key.key_name}" revoked`, 'error');
+    const res = await apiFetch(`/api/keys/${id}`, { method: 'DELETE' });
+    if (res) {
+      key.active = false;
+      renderKeys();
+      toast(`Key "${key.key_name}" revoked`, 'error');
+    } else {
+      toast('Failed to revoke key — API unreachable', 'error');
+    }
   }
 
   // ── Sync Now ─────────────────────────────────────────
@@ -1065,21 +1017,23 @@
   $('#btn-sync-now').addEventListener('click', async () => {
     toast('Sync triggered', 'info');
     const label = $('#sync-status-label');
-    label.textContent = 'Running';
-    label.className = 'sync-stat-value sync-stat-value--warn';
+    if (label) {
+      label.textContent = 'Running';
+      label.className = 'sync-stat-value sync-stat-value--warn';
+    }
 
-    const res = await apiFetch('/api/sync/run', { method: 'POST' });
+    const res = await apiFetch('/api/sync/trigger', { method: 'POST' });
 
     if (res) {
       toast('Sync completed', 'success');
     } else {
-      // Simulate if API unreachable
-      await new Promise(r => setTimeout(r, 2000));
-      toast('Sync completed (simulated)', 'success');
+      toast('Sync failed — API unreachable', 'error');
     }
 
-    label.textContent = 'Idle';
-    label.className = 'sync-stat-value sync-stat-value--ok';
+    if (label) {
+      label.textContent = 'Idle';
+      label.className = 'sync-stat-value sync-stat-value--ok';
+    }
 
     // Refresh sync log
     fetchSyncLog();
@@ -1088,8 +1042,18 @@
   // ── Settings Save ────────────────────────────────────
 
   $('#btn-save-settings').addEventListener('click', () => {
-    toast('Settings saved', 'success');
+    toast('Settings are configured via environment variables', 'info');
   });
+
+  // ── Agent Detail Back Button ─────────────────────────
+
+  const btnBackAgents = $('#btn-back-agents');
+  if (btnBackAgents) {
+    btnBackAgents.addEventListener('click', () => {
+      $('#agent-grid').classList.remove('hidden');
+      $('#agent-detail').classList.add('hidden');
+    });
+  }
 
   // ── Navigation ───────────────────────────────────────
 
@@ -1153,12 +1117,13 @@
   // ── Init ─────────────────────────────────────────────
 
   async function init() {
-    // Render immediately from mock data so the UI isn't blank
+    // Render empty states so the UI isn't blank while API loads
     renderActivity();
     renderDevices();
     renderKeys();
     renderAgents();
     renderSyncLog();
+    renderAnalyticsStats();
     initSettings();
 
     // Kick off all API fetches in parallel

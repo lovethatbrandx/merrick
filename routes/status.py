@@ -2,7 +2,7 @@ from fastapi import APIRouter
 import database as db
 import honcho
 import dreaming
-from config import logger
+from config import logger, DB_HOST, DB_PORT, DB_NAME, HONCHO_URL, HONCHO_WORKSPACE, HONCHO_USER_PEER, MEM0_API_URL, SYNC_INTERVAL, SYNC_ENABLED
 
 router = APIRouter(prefix="/api", tags=["status"])
 
@@ -58,7 +58,7 @@ def system_status():
     try:
         last = db.query_one("SELECT * FROM sync_log ORDER BY started_at DESC LIMIT 1")
         status["last_sync"] = dict(last) if last else None
-        raw_status = (last["status"] if last else None) or "idle"
+        raw_status = (last.get("status") if last else None) or "idle"
         # normalise DB status values to what the frontend expects
         if raw_status == "completed":
             status["sync_status"] = "idle"
@@ -89,5 +89,28 @@ def system_status():
     except Exception as e:
         logger.error("dreaming stats failed: %s", e)
         status["dreaming"] = {"error": str(e)}
+
+    # --- Health object for dashboard cards ---
+    status["health"] = {
+        "api": {"status": "healthy", "uptime": "active"},
+        "db": {"status": "healthy", "host": f"{db.DB_HOST}:{db.DB_PORT}", "name": db.DB_NAME},
+        "honcho": {
+            "status": "healthy" if status.get("honcho_sessions") != "error" else "error",
+            "workspace": HONCHO_WORKSPACE,
+        },
+        "mem0": {
+            "status": "healthy" if status.get("mem0_count") != "error" else "error",
+        },
+    }
+
+    # --- Config for developer settings ---
+    status["db_host"] = DB_HOST
+    status["db_port"] = DB_PORT
+    status["honcho_url"] = HONCHO_URL
+    status["honcho_workspace"] = HONCHO_WORKSPACE
+    status["honcho_user_peer"] = HONCHO_USER_PEER
+    status["mem0_api_url"] = MEM0_API_URL
+    status["sync_interval"] = SYNC_INTERVAL
+    status["sync_enabled"] = SYNC_ENABLED
 
     return status
