@@ -1,5 +1,7 @@
 <div align="center">
   <img src="static/merrick_logo.png" alt="Merrick" width="400">
+  
+  *"Elephants never forget, and neither does Merrick."*
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg?style=for-the-badge)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
@@ -579,4 +581,4 @@ merrick/
 
 ---
 
-> *"Elephants never forget, and neither does Merrick."*
+> *Named in honor of Joseph Merrick, whose life and humanity deserve to be remembered.*
