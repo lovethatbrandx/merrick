@@ -5,11 +5,15 @@
 1. [Component Map](#1-component-map)
 2. [Database Schema](#2-database-schema)
 3. [Route Structure & API Contract](#3-route-structure--api-contract)
-4. [Settings System](#4-settings-system)
-5. [One-Click Setup Flow](#5-one-click-setup-flow)
-6. [Config File Structure](#6-config-file-structure)
-7. [Dependencies](#7-dependencies)
-8. [Phased Implementation Plan](#8-phased-implementation-plan)
+4. [Auth Middleware](#4-auth-middleware)
+5. [Configuration System](#5-configuration-system)
+6. [Dreaming Engine](#6-dreaming-engine)
+7. [Agent System](#7-agent-system)
+8. [Device Provisioning](#8-device-provisioning)
+9. [MCP Server](#9-mcp-server)
+10. [CLI](#10-cli)
+11. [Docker](#11-docker)
+12. [Current Status](#12-current-status)
 
 ---
 
@@ -28,26 +32,27 @@
 │       │              │              │                  │             │
 │  ┌────┴──────────────┴──────────────┴──────────────────┴──────────┐ │
 │  │                     MIDDLEWARE LAYER                           │ │
-│  │  CORS · Auth (API Key) · Rate Limiting · Request Logging      │ │
+│  │                    CORS · Auth (API Key)                       │ │
 │  └────────────────────────┬──────────────────────────────────────┘ │
 │                           │                                        │
 │  ┌────────────────────────┴──────────────────────────────────────┐ │
-│  │                     SERVICE LAYER                             │ │
-│  │  Settings · Devices · Keys · Memory · Analytics · Webhooks   │ │
+│  │                     ROUTE LAYER                               │ │
+│  │  memory · query · sync · status · categories · webhooks       │ │
+│  │  analytics · export · keys · devices · agents · dreaming      │ │
 │  └────┬─────────────┬──────────────┬────────────────────────────┘ │
 │       │             │              │                               │
 │  ┌────┴────┐  ┌─────┴─────┐  ┌────┴──────┐                      │
-│  │ mem0    │  │  Honcho    │  │ PostgreSQL │                      │
-│  │ Client  │  │  Client    │  │ (Merrick)  │                      │
+│  │ honcho  │  │ provisioning│  │ PostgreSQL │                      │
+│  │ Client  │  │ (auto-dev) │  │ (Merrick)  │                      │
 │  └────┬────┘  └─────┬─────┘  └────┬──────┘                      │
 └───────┼──────────────┼──────────────┼──────────────────────────────┘
         │              │              │
-┌───────┴──┐  ┌───────┴──────┐  ┌────┴──────────────────────┐
-│  mem0    │  │   Honcho     │  │   PostgreSQL + pgvector    │
-│  (port   │  │   (port 8000 │  │   (port 5433)              │
-│  8888)   │  │   or cloud)  │  │   - memories (mem0)        │
-│          │  │              │  │   - merrick_* (internal)    │
-└──────────┘  └──────────────┘  └────────────────────────────┘
+┌───────┴──┐  ┌────────┴────┐  ┌────┴──────────────────────┐
+│  Honcho  │  │  Honcho     │  │   PostgreSQL + pgvector    │
+│  (port   │  │  Peer Mgmt  │  │   (port 5433)              │
+│  8000)   │  │             │  │   - memories (mem0)        │
+│          │  │             │  │   - merrick_* (internal)    │
+└──────────┘  └─────────────┘  └────────────────────────────┘
 
 Device Fleet:
 ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
@@ -72,161 +77,202 @@ Device Fleet:
 | Component | File(s) | Responsibility |
 |---|---|---|
 | **FastAPI App** | `app.py` | Entrypoint, lifespan, CORS, router mount, static serving, health check |
-| **Config Loader** | `config.py` → `settings.py` | Cascading config: env vars → config file → database → API overrides |
-| **Database** | `database.py` | Connection pool, query helpers, schema init/migration |
+| **Config** | `config.py` | Flat env-var loading via `os.getenv()`. No cascade, no file, no DB. |
+| **Database** | `database.py` | Connection pool (`psycopg2`), query helpers, schema init via `CREATE TABLE IF NOT EXISTS` |
+| **Auth Middleware** | `middleware/auth.py` | Intercepts `/v1/*` only. Bearer token → SHA-256 hash → DB lookup → rate limit → inject `request.state` |
 | **Honcho Client** | `honcho.py` | HTTP client for Honcho API (local or cloud). Thread-safe singleton. |
-| **mem0 Client** | `mem0_client.py` (new) | HTTP client for mem0 API. Auth token management. Replaces inline httpx calls. |
-| **Sync Engine** | `sync.py` | Bidirectional sync between mem0 and Honcho. Background daemon thread. |
-| **Auth Middleware** | `middleware/auth.py` (new) | API key validation, device identification, rate limit lookup |
-| **Rate Limiter** | `middleware/ratelimit.py` (new) | Per-key, per-endpoint rate limiting (token bucket in-memory, with DB persistence for cross-restart) |
-| **Device Registry** | `services/devices.py` (new) | Device CRUD, peer mapping, device-scoped memory operations |
-| **Key Manager** | `services/keys.py` (new) | API key generation, rotation, revocation, scoping |
-| **Settings Service** | `services/settings.py` (new) | Settings CRUD with cascade logic |
-| **Setup Wizard** | `services/setup.py` (new) | One-click installation, dependency detection, config generation |
-| **CLI** | `cli.py` (new) | `merrick` command entrypoint for all subcommands |
+| **Sync Engine** | `sync.py` | Bidirectional sync between mem0 and Honcho. Background daemon thread started in `app.py` lifespan. |
+| **Provisioning** | `provisioning.py` | Auto-creates Honcho peers and mem0 user mappings on first device connect. Thread-safe cache + DB persistence. |
+| **Dreaming Engine** | `dreaming.py` | Memory compaction loop: deduplication, contradiction detection, staleness marking. Background daemon thread. |
+| **Agent Profiles** | `routes/agents.py` | CRUD for agent profiles, agent-scoped memory read/write, external agent endpoint with token-budget-aware memory loading. |
+| **API Keys** | `routes/keys.py` | Key generation (`merrick_sk_` + `secrets.token_urlsafe`), SHA-256 hashing, CRUD, rotation, revocation. |
+| **Devices** | `routes/devices.py` | Device listing via provisioning module. Thin route layer. |
+| **Dreaming Routes** | `routes/dreaming.py` | Manual trigger and stats for the dreaming engine. |
+| **MCP Server** | `mcp_server/` | Exposes Merrick as MCP tools/resources for LM Studio, Claude Desktop, etc. Stdio transport. |
+| **CLI** | `merrick_cli/` | Click-based CLI: status, devices, keys, memory, sync, doctor. Talks to Merrick over HTTP. |
 | **Dashboard SPA** | `static/*` | Browser UI for management, visualization, settings |
 
-### 1.3 Data Flow Diagrams
-
-#### Memory Write (External Device → `/v1/memory/write`)
+### 1.3 Data Flow: External Device Write
 
 ```
 Device                    Merrick                     mem0              Honcho
   │                          │                          │                 │
   │  POST /v1/memory/write   │                          │                 │
-  │  Authorization: Bearer k │                          │                 │
+  │  Authorization: Bearer m │                          │                 │
   │─────────────────────────>│                          │                 │
   │                          │                          │                 │
   │                     [auth middleware]               │                 │
   │                     validate API key                │                 │
   │                     identify device_id              │                 │
   │                     check rate limit                │                 │
-  │                     resolve scope                   │                 │
+  │                     check permissions               │                 │
   │                          │                          │                 │
-  │                     [memory service]               │                 │
-  │                     ┌────┴────────────────────┐    │                 │
-  │                     │ if scope includes mem0:  │    │                 │
-  │                     │   POST /memories ────────│───>│                 │
-  │                     │                          │<───│ (result)       │
-  │                     │ if scope includes honcho: │   │                 │
-  │                     │   POST session/msg ───────│────│──────────────>│
-  │                     │                          │    │                 │<───│
-  │                     └────┬────────────────────┘    │                 │
+  │                     [provisioning]                  │                 │
+  │                     get_or_provision(device_id)     │                 │
+  │                     → honcho_peer_id, mem0_user_id  │                 │
   │                          │                          │                 │
-  │                     [analytics]                    │                 │
-  │                     track_event(memory.created,    │                 │
-  │                       device_id=device_x)           │                 │
-  │                          │                          │                 │
-  │                     [webhooks]                     │                 │
-  │                     fire_webhooks(memory.created)  │                 │
+  │                     [memory route]                  │                 │
+  │                     POST /api/memory/write ─────────│──>              │
+  │                     POST /api/memory/write ─────────────────────────>│
   │                          │                          │                 │
   │  { status, results }    │                          │                 │
   │<─────────────────────────│                          │                 │
-```
-
-#### Memory Read (External Device → `/v1/memory/search`)
-
-```
-Device                    Merrick                     mem0              Honcho
-  │                          │                          │                 │
-  │  POST /v1/memory/search  │                          │                 │
-  │  Authorization: Bearer k │                          │                 │
-  │─────────────────────────>│                          │                 │
-  │                          │                          │                 │
-  │                     [auth + rate limit]             │                 │
-  │                          │                          │                 │
-  │                     [query service]                 │                 │
-  │                     ┌────┴────────────────────┐    │                 │
-  │                     │ full-text search ────────│───>│                 │
-  │                     │                          │<───│ (results)      │
-  │                     │ honcho peer search ──────│────│──────────────>│
-  │                     │                          │    │                 │<───│
-  │                     │ deduplicate              │    │                 │
-  │                     │ filter by device scope    │    │                 │
-  │                     └────┬────────────────────┘    │                 │
-  │                          │                          │                 │
-  │  { results, count }      │                          │                 │
-  │<─────────────────────────│                          │                 │
-```
-
-#### Background Sync
-
-```
-Sync Engine (daemon thread)                mem0           Honcho
-  │                                          │              │
-  │  every N seconds                         │              │
-  │  ┌───────────────────────────┐           │              │
-  │  │ sync_mem0_to_honcho()    │           │              │
-  │  │  SELECT from memories ────│──>        │              │
-  │  │  for each unsynced:      │           │              │
-  │  │    POST message ──────────────────────────────────>│
-  │  │    INSERT sync_state     │           │              │
-  │  └───────────────────────────┘           │              │
-  │  ┌───────────────────────────┐           │              │
-  │  │ sync_honcho_to_mem0()    │           │              │
-  │  │  list conclusions ─────────────────────>           │
-  │  │  for each unsynced:      │           │              │
-  │  │    INSERT into memories ──│──>        │              │
-  │  │    INSERT sync_state     │           │              │
-  │  └───────────────────────────┘           │              │
-  │  INSERT sync_log (completed)  │           │              │
-  │  fire webhooks (sync.completed)│         │              │
-```
-
-#### Device Registration
-
-```
-Admin Dashboard / CLI         Merrick                 PostgreSQL
-  │                              │                       │
-  │  POST /api/devices           │                       │
-  │  { name, type }              │                       │
-  │─────────────────────────────>│                       │
-  │                              │  INSERT device_peers  │
-  │                              │──────────────────────>│
-  │                              │                       │
-  │                              │  POST /api/keys       │
-  │                              │  { device_id, scope } │
-  │                              │──────────────────────>│
-  │                              │  INSERT api_keys      │
-  │                              │                       │
-  │                              │  Honcho: create peer  │
-  │                              │───────────────────────│──> honcho API
-  │                              │<──────────────────────│<── peer created
-  │                              │  UPDATE device_peers  │
-  │                              │  SET honcho_peer_id   │
-  │                              │──────────────────────>│
-  │  { device, api_key }         │                       │
-  │<─────────────────────────────│                       │
 ```
 
 ---
 
 ## 2. Database Schema
 
-All tables live in the same PostgreSQL database that mem0 uses. Merrick owns its own tables; the `memories` table is owned by mem0.
+All tables live in a single PostgreSQL + pgvector database. Merrick owns all tables; the `memories` table is shared with mem0.
 
-### 2.1 Existing Tables (Modified)
+### 2.1 `memories` — Shared with mem0
 
-#### `sync_state` — Unchanged
+```sql
+CREATE TABLE IF NOT EXISTS memories (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    vector FLOAT8[],
+    payload JSONB DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_memories_payload ON memories USING GIN (payload);
+```
+
+The `payload` JSONB column contains: `data` (text content), `source`, `user_id`, `compacted` (boolean), `compacted_at`, `compacted_reason`, and custom metadata.
+
+### 2.2 `api_keys` — Authentication tokens
+
+```sql
+CREATE TABLE IF NOT EXISTS api_keys (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    key_hash TEXT NOT NULL UNIQUE,
+    key_prefix TEXT NOT NULL,
+    key_name TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    agent_slug TEXT,
+    load_memories BOOLEAN DEFAULT true,
+    memory_categories TEXT[],
+    memory_exclude_categories TEXT[] DEFAULT '{}',
+    memory_scope TEXT DEFAULT 'shared'
+        CHECK (memory_scope IN ('shared', 'agent_only', 'both')),
+    max_memory_tokens INTEGER DEFAULT 2000,
+    permissions TEXT[] DEFAULT ARRAY['read', 'write'],
+    rate_limit INTEGER DEFAULT 100,
+    active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    last_used_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash) WHERE active = true;
+CREATE INDEX IF NOT EXISTS idx_api_keys_device ON api_keys(device_id);
+CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys(id) WHERE active = true;
+```
+
+**Key format:** `merrick_sk_` + `secrets.token_urlsafe(32)`. Example: `merrick_sk_aBcDeFgHiJkLmNoPqRsTuVwXyZ01234567890_`
+
+**Key hash:** `SHA-256(key_bytes)` stored in DB. Raw key shown once at creation. Verification: hash incoming bearer and compare against `key_hash`.
+
+**Memory scope values:**
+| Scope | Behavior |
+|---|---|
+| `shared` | Agent reads from the global `memories` table only |
+| `agent_only` | Agent reads from `agent_memories` table only |
+| `both` | Agent reads from both tables, combined |
+
+**Permission values:** `read`, `write`. Write permission is checked for mutating methods (POST/PUT/DELETE/PATCH) on `/v1/*` endpoints.
+
+### 2.3 `agent_profiles` — Agent definitions
+
+```sql
+CREATE TABLE IF NOT EXISTS agent_profiles (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    system_prompt TEXT NOT NULL,
+    personality JSONB DEFAULT '{}',
+    custom_instructions TEXT,
+    memory_scope TEXT DEFAULT 'shared'
+        CHECK (memory_scope IN ('shared', 'agent_only')),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 2.4 `agent_memories` — Agent-scoped memories
+
+```sql
+CREATE TABLE IF NOT EXISTS agent_memories (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    profile_id UUID REFERENCES agent_profiles(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'general',
+    source_device TEXT,
+    context JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_agent_memories_profile ON agent_memories(profile_id);
+CREATE INDEX IF NOT EXISTS idx_agent_memories_category ON agent_memories(category);
+CREATE INDEX IF NOT EXISTS idx_agent_memories_profile_category ON agent_memories(profile_id, category);
+```
+
+The `context` JSONB column stores compaction metadata (`compacted`, `compacted_at`, `compacted_reason`, etc.).
+
+### 2.5 `agent_profile_devices` — Device-agent assignments
+
+```sql
+CREATE TABLE IF NOT EXISTS agent_profile_devices (
+    profile_id UUID REFERENCES agent_profiles(id) ON DELETE CASCADE,
+    device_id TEXT NOT NULL,
+    active BOOLEAN DEFAULT true,
+    loaded_at TIMESTAMPTZ,
+    PRIMARY KEY (profile_id, device_id)
+);
+CREATE INDEX IF NOT EXISTS idx_agent_profile_devices_device ON agent_profile_devices(device_id);
+```
+
+### 2.6 `device_identities` — Auto-provisioned device storage
+
+```sql
+CREATE TABLE IF NOT EXISTS device_identities (
+    device_id TEXT PRIMARY KEY,
+    honcho_peer_id TEXT NOT NULL,
+    mem0_user_id TEXT NOT NULL,
+    honcho_workspace TEXT,
+    provisioned_at TIMESTAMPTZ DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+    metadata JSONB DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS idx_device_identities_last_seen ON device_identities(last_seen_at);
+```
+
+### 2.7 `sync_state` — Bidirectional sync tracking
+
 ```sql
 CREATE TABLE IF NOT EXISTS sync_state (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     source TEXT NOT NULL CHECK (source IN ('mem0', 'honcho')),
     source_id TEXT NOT NULL,
-    target TEXT NOT NULL CHECK (source IN ('mem0', 'honcho')),
+    target TEXT NOT NULL CHECK (target IN ('mem0', 'honcho')),
     target_id TEXT,
     synced_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(source, source_id, target)
 );
 ```
 
-#### `sync_log` — Add `device_id` column
-```sql
-ALTER TABLE sync_log ADD COLUMN IF NOT EXISTS device_id UUID REFERENCES device_peers(id) ON DELETE SET NULL;
-```
-A `NULL` device_id means the sync was triggered by the system (background) rather than a specific device.
+### 2.8 `sync_log` — Sync run history
 
-#### `categories` — Unchanged
+```sql
+CREATE TABLE IF NOT EXISTS sync_log (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    direction TEXT NOT NULL CHECK (direction IN ('mem0_to_honcho', 'honcho_to_mem0')),
+    items_synced INTEGER DEFAULT 0,
+    errors INTEGER DEFAULT 0,
+    started_at TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ,
+    status TEXT DEFAULT 'running'
+);
+```
+
+### 2.9 `categories` — Memory categories
+
 ```sql
 CREATE TABLE IF NOT EXISTS categories (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -236,7 +282,8 @@ CREATE TABLE IF NOT EXISTS categories (
 );
 ```
 
-#### `memory_categories` — Unchanged
+### 2.10 `memory_categories` — Junction table
+
 ```sql
 CREATE TABLE IF NOT EXISTS memory_categories (
     memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
@@ -245,152 +292,36 @@ CREATE TABLE IF NOT EXISTS memory_categories (
 );
 ```
 
-#### `webhooks` — Add `events` expansion
-```sql
--- Existing, but event types will expand to include:
--- 'memory.created', 'memory.updated', 'sync.completed',
--- 'device.registered', 'device.revoked', 'key.rotated'
-```
+### 2.11 `webhooks` — Event webhooks
 
-#### `analytics` — Add `device_id` column
 ```sql
-ALTER TABLE analytics ADD COLUMN IF NOT EXISTS device_id UUID REFERENCES device_peers(id) ON DELETE SET NULL;
-```
-
-### 2.2 New Tables
-
-#### `device_peers` — Registered devices and their Honcho peers
-```sql
-CREATE TABLE IF NOT EXISTS device_peers (
+CREATE TABLE IF NOT EXISTS webhooks (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    name TEXT NOT NULL,                          -- Human-readable name ("Desktop App", "Android Phone")
-    device_type TEXT NOT NULL CHECK (device_type IN (
-        'desktop', 'mobile', 'bot', 'server', 'browser', 'other'
-    )),
-    honcho_peer_id TEXT,                         -- Honcho peer ID (populated after Honcho registration)
-    honcho_session_prefix TEXT,                  -- Session prefix for this device (e.g., "dev_abc123_")
-    user_id TEXT DEFAULT 'ron',                  -- Owner user ID
-    is_active BOOLEAN DEFAULT true,
-    last_seen_at TIMESTAMPTZ,
-    metadata JSONB DEFAULT '{}',                 -- Device-reported metadata (OS, app version, etc.)
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_device_peers_user ON device_peers(user_id);
-CREATE INDEX IF NOT EXISTS idx_device_peers_active ON device_peers(is_active);
-```
-
-**Design notes:**
-- `honcho_peer_id` is nullable because the device may be registered before Honcho is reachable. The sync engine or a background task can backfill it.
-- `honcho_session_prefix` is used to namespace Honcho sessions per device. When device `abc123` writes to Honcho, the session ID becomes `dev_abc123_<context>` instead of a global session.
-- `is_active` allows soft-revocation without deleting the device record (preserves analytics history).
-
-#### `api_keys` — Authentication tokens for external devices
-```sql
-CREATE TABLE IF NOT EXISTS api_keys (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    device_id UUID NOT NULL REFERENCES device_peers(id) ON DELETE CASCADE,
-    key_hash TEXT NOT NULL UNIQUE,               -- SHA-256 hash of the raw key (never store raw keys)
-    key_prefix TEXT NOT NULL,                    -- First 8 chars of key for display ("mk_abc123...")
-    name TEXT DEFAULT '',                        -- Optional label ("Production key", "Dev key")
-    scope TEXT[] NOT NULL DEFAULT ARRAY['memory.read', 'memory.write', 'query.read'],
-    rate_limit_rpm INTEGER DEFAULT 60,           -- Requests per minute (0 = unlimited)
-    rate_limit_rpd INTEGER DEFAULT 10000,        -- Requests per day
-    is_active BOOLEAN DEFAULT true,
-    revoked_at TIMESTAMPTZ,
-    last_used_at TIMESTAMPTZ,
-    expires_at TIMESTAMPTZ,                      -- NULL = never expires
+    url TEXT NOT NULL,
+    events TEXT[] DEFAULT ARRAY['memory.created'],
+    active BOOLEAN DEFAULT true,
+    secret TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
-
-CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
-CREATE INDEX IF NOT EXISTS idx_api_keys_device ON api_keys(device_id);
-CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);
 ```
 
-**Key format:** `mk_` prefix + 40 random alphanumeric characters. Example: `mk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0`
+### 2.12 `analytics` — Event tracking
 
-**Key hash:** `SHA-256(key_bytes)` stored in DB. The raw key is only shown once at creation time. Verification: hash the incoming bearer token and compare against `key_hash`.
-
-**Scope values:**
-| Scope | Grants |
-|---|---|
-| `memory.read` | Search/read memories via `/v1/memory/search`, `/v1/memory/read` |
-| `memory.write` | Write memories via `/v1/memory/write` |
-| `query.read` | Use the OpenAI-compatible `/v1/chat/completions` endpoint |
-| `sync.read` | View sync status for this device |
-| `device.read` | View own device info |
-
-**Default scope** for new keys: `['memory.read', 'memory.write', 'query.read']`
-
-#### `settings` — Persistent configuration overrides
 ```sql
-CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY,
-    value JSONB NOT NULL,
-    source TEXT NOT NULL DEFAULT 'database' CHECK (source IN ('database', 'api', 'wizard')),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_by TEXT                             -- 'dashboard', 'cli', 'setup_wizard', 'api'
-);
-
-CREATE INDEX IF NOT EXISTS idx_settings_source ON settings(source);
-```
-
-**Key format:** Dot-notation namespace. Examples:
-- `general.honcho_mode` → `"cloud"` or `"local"`
-- `general.honcho_url` → `"https://honcho.dev"` or `"http://localhost:8000"`
-- `general.mem0_mode` → `"managed"` or `"postgresql"`
-- `general.mem0_url` → `"http://localhost:8888"`
-- `general.main_user_peer` → `"ron"`
-- `general.honcho_workspace` → `"hermes"`
-- `sync.interval` → `300`
-- `sync.enabled` → `true`
-- `server.host` → `"0.0.0.0"`
-- `server.port` → `5001`
-- `server.cors_origins` → `["*"]`
-- `rate_limiting.enabled` → `true`
-- `rate_limiting.default_rpm` → `60`
-- `rate_limiting.default_rpd` → `10000`
-
-#### `device_memory_links` — Maps device writes to memory IDs
-```sql
-CREATE TABLE IF NOT EXISTS device_memory_links (
+CREATE TABLE IF NOT EXISTS analytics (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    device_id UUID NOT NULL REFERENCES device_peers(id) ON DELETE CASCADE,
-    memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
-    mem0_id TEXT,                                -- mem0's memory ID for this entry
-    honcho_message_id TEXT,                      -- Honcho message ID for this entry
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(device_id, memory_id)
+    event_type TEXT NOT NULL,
+    source TEXT,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
-
-CREATE INDEX IF NOT EXISTS idx_device_memory_links_device ON device_memory_links(device_id);
-CREATE INDEX IF NOT EXISTS idx_device_memory_links_memory ON device_memory_links(memory_id);
+CREATE INDEX IF NOT EXISTS idx_analytics_created ON analytics(created_at);
+CREATE INDEX IF NOT EXISTS idx_analytics_event_type ON analytics(event_type);
 ```
 
-**Purpose:** When device A writes a memory, we need to know which memories belong to which device for:
-- Device-scoped search results (return only memories written by that device, or all if no filter)
-- Analytics per-device breakdown
-- Device revocation (optionally unlink memories when removing a device)
+### 2.13 Migration Strategy
 
-### 2.3 Migration Strategy
-
-There is no Alembic. Migrations run via `database.py:init_schema()` at startup:
-
-1. `CREATE TABLE IF NOT EXISTS` for all tables (safe, idempotent)
-2. `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` for new columns on existing tables
-3. A new `schema_version` table tracks which migrations have run:
-
-```sql
-CREATE TABLE IF NOT EXISTS schema_version (
-    version INTEGER PRIMARY KEY,
-    applied_at TIMESTAMPTZ DEFAULT NOW(),
-    description TEXT
-);
-```
-
-The `init_schema()` function checks `SELECT MAX(version) FROM schema_version` and applies any migrations above the current version. Each migration is a numbered SQL string in a Python dict.
+There is no Alembic. All migrations run via `database.py:init_schema()` at startup using `CREATE TABLE IF NOT EXISTS` (idempotent). Adding a new column or table requires editing `init_schema()` directly.
 
 ---
 
@@ -398,13 +329,15 @@ The `init_schema()` function checks `SELECT MAX(version) FROM schema_version` an
 
 ### 3.1 Internal Namespace: `/api/*`
 
-All `/api/*` routes are **unauthenticated** (dashboard and local CLI use only). They are protected only by network binding (default: `127.0.0.1` for non-Docker deployments).
+All `/api/*` routes are **unauthenticated** (dashboard and local CLI use only). They are protected only by network binding (default: `0.0.0.0` for Docker).
+
+Both `/api/*` and `/v1/*` routes are **co-located in the same route files** under `routes/`. There is no separate `routes/v1/` directory.
 
 #### Health & Status
 
 | Method | Path | Description | Response |
 |---|---|---|---|
-| `GET` | `/api/health` | Health check | `{"status": "ok", "service": "merrick", "version": "0.2.0"}` |
+| `GET` | `/api/health` | Health check | `{"status": "ok", "service": "merrick"}` |
 | `GET` | `/api/status` | Dashboard aggregate stats | See status schema below |
 
 **GET /api/status response:**
@@ -481,39 +414,7 @@ All `/api/*` routes are **unauthenticated** (dashboard and local CLI use only). 
 | `GET` | `/api/sync/status` | Current sync status + state counts |
 | `GET` | `/api/sync/log` | Sync history (paginated) |
 
-**GET /api/sync/status response:**
-```json
-{
-  "running": 0,
-  "last_sync": {
-    "id": "...", "direction": "full",
-    "items_synced": 5, "errors": 0,
-    "started_at": "...", "completed_at": "...",
-    "status": "completed"
-  },
-  "sync_state_counts": [
-    { "source": "mem0", "target": "honcho", "count": 42 },
-    { "source": "honcho", "target": "mem0", "count": 12 }
-  ]
-}
-```
-
 **GET /api/sync/log query params:** `?limit=50&offset=0`
-
-**GET /api/sync/log response:**
-```json
-{
-  "logs": [
-    {
-      "id": "...", "direction": "full",
-      "items_synced": 5, "errors": 0,
-      "started_at": "...", "completed_at": "...",
-      "status": "completed"
-    }
-  ],
-  "total": 120
-}
-```
 
 #### Categories (Internal)
 
@@ -544,25 +445,8 @@ All `/api/*` routes are **unauthenticated** (dashboard and local CLI use only). 
 | `GET` | `/api/analytics/timeline` | Memory creation over time |
 | `GET` | `/api/analytics/sources` | Breakdown by source |
 | `GET` | `/api/analytics/categories` | Breakdown by category |
-| `GET` | `/api/analytics/devices` | Per-device breakdown (**new**) |
+| `GET` | `/api/analytics/devices` | Per-device breakdown |
 | `POST` | `/api/analytics/track` | Track a custom event |
-
-**GET /api/analytics/devices response (new):**
-```json
-{
-  "devices": [
-    {
-      "device_id": "abc-123",
-      "device_name": "Desktop App",
-      "device_type": "desktop",
-      "memory_count": 42,
-      "last_write": "2026-07-13T10:00:00Z",
-      "writes_today": 5,
-      "writes_this_week": 23
-    }
-  ]
-}
-```
 
 #### Export (Internal)
 
@@ -571,263 +455,93 @@ All `/api/*` routes are **unauthenticated** (dashboard and local CLI use only). 
 | `GET` | `/api/export/json` | Export memories as JSON |
 | `GET` | `/api/export/csv` | Export as CSV |
 | `GET` | `/api/export/markdown` | Export as Markdown |
-| `GET` | `/api/export/full` | Full backup: settings + devices + keys + memories (**new**) |
+| `GET` | `/api/export/full` | Full backup: devices + keys + memories |
 
-**GET /api/export/full response:**
-```json
-{
-  "exported_at": "2026-07-13T12:00:00Z",
-  "version": "0.2.0",
-  "settings": { ... },
-  "devices": [ ... ],
-  "api_keys": [ ... { "key_prefix": "mk_abc..." } ],
-  "categories": [ ... ],
-  "memories": [ ... ],
-  "sync_log": [ ... ],
-  "analytics_summary": { ... }
-}
-```
-
-#### Devices & API Keys (Internal — New)
+#### Devices (Internal)
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/devices` | List all registered devices |
-| `POST` | `/api/devices` | Register a new device |
-| `GET` | `/api/devices/{id}` | Get device details + key list |
-| `PUT` | `/api/devices/{id}` | Update device metadata |
-| `DELETE` | `/api/devices/{id}` | Soft-delete (deactivate) a device |
-| `POST` | `/api/devices/{id}/restore` | Reactivate a device |
+| `GET` | `/api/devices` | List all provisioned devices |
 
-**POST /api/devices request:**
+**GET /api/devices response:**
 ```json
 {
-  "name": "Desktop App",
-  "device_type": "desktop",
-  "user_id": "ron",
-  "metadata": { "os": "linux", "app_version": "1.0.0" }
+  "devices": [
+    {
+      "device_id": "hermes_phone_abc123",
+      "honcho_peer_id": "device_hermes_phone_abc123",
+      "mem0_user_id": "device_hermes_phone_abc123",
+      "provisioned_at": "2026-07-13T10:00:00Z",
+      "last_seen_at": "2026-07-13T12:00:00Z",
+      "metadata": {}
+    }
+  ],
+  "count": 1
 }
 ```
 
-**POST /api/devices response:**
-```json
-{
-  "device": {
-    "id": "...",
-    "name": "Desktop App",
-    "device_type": "desktop",
-    "honcho_peer_id": null,
-    "honcho_session_prefix": "dev_abc123_",
-    "is_active": true,
-    "created_at": "..."
-  }
-}
-```
+#### API Keys (Internal)
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/devices/{id}/keys` | Create an API key for a device |
-| `GET` | `/api/devices/{id}/keys` | List keys for a device |
-| `DELETE` | `/api/keys/{key_id}` | Revoke an API key |
-| `POST` | `/api/keys/{key_id}/rotate` | Rotate an API key (revoke old, create new) |
+| `GET` | `/api/keys` | List all API keys (never returns `key_hash`) |
+| `POST` | `/api/keys` | Create a new API key (secret shown once) |
+| `PUT` | `/api/keys/{key_id}` | Update key scope/config |
+| `DELETE` | `/api/keys/{key_id}` | Soft-delete (set `active=false`, `revoked_at=NOW()`) |
+| `POST` | `/api/keys/{key_id}/rotate` | Rotate key (new secret, invalidate old) |
 
-**POST /api/devices/{id}/keys request:**
+**POST /api/keys request:**
 ```json
 {
-  "name": "Production key",
-  "scope": ["memory.read", "memory.write", "query.read"],
-  "rate_limit_rpm": 60,
-  "rate_limit_rpd": 10000,
-  "expires_at": "2027-01-01T00:00:00Z"
+  "device_id": "hermes_phone_abc123",
+  "key_name": "Production key",
+  "agent_slug": "hermes",
+  "load_memories": true,
+  "memory_categories": ["preferences", "context"],
+  "memory_exclude_categories": [],
+  "memory_scope": "shared",
+  "max_memory_tokens": 2000,
+  "permissions": ["read", "write"],
+  "rate_limit": 100
 }
 ```
 
-**POST /api/devices/{id}/keys response:**
+**POST /api/keys response:**
 ```json
 {
-  "key": "mk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0",
-  "key_id": "...",
-  "key_prefix": "mk_a1b2c3",
-  "scope": ["memory.read", "memory.write", "query.read"],
-  "rate_limit_rpm": 60,
-  "rate_limit_rpd": 10000,
-  "expires_at": "2027-01-01T00:00:00Z",
+  "id": "...",
+  "secret": "merrick_sk_aBcDeFgHiJkLmNoPqRsTuVwXyZ01234567890_",
+  "key_prefix": "merrick_sk_aBcDeFg...",
+  "key_name": "Production key",
+  "device_id": "hermes_phone_abc123",
+  "agent_slug": "hermes",
+  "permissions": ["read", "write"],
+  "rate_limit": 100,
+  "active": true,
+  "memory_categories": ["preferences", "context"],
+  "max_memory_tokens": 2000,
   "created_at": "..."
 }
 ```
 
-**WARNING:** The `key` field is only returned once at creation time. It cannot be retrieved later.
+**WARNING:** The `secret` field is only returned once at creation time. It cannot be retrieved later.
 
-**POST /api/keys/{key_id}/rotate response:**
-```json
-{
-  "new_key": "mk_z9y8x7w6v5u4t3s2r1q0p9o8n7m6l5k4j3i2h1g0",
-  "old_key_id": "...",
-  "new_key_id": "...",
-  "rotated_at": "..."
-}
-```
-
-#### Settings (Internal — New)
+#### Agents (Internal)
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/settings` | Get all settings (resolved cascade) |
-| `GET` | `/api/settings/{key}` | Get a specific setting |
-| `PUT` | `/api/settings/{key}` | Update a setting (database override) |
-| `DELETE` | `/api/settings/{key}` | Reset a setting (remove DB override, fall back to config file) |
-| `POST` | `/api/settings/test` | Test a setting value (e.g., test Honcho connection) |
+| `GET` | `/api/agents` | List all agent profiles with memory counts |
+| `POST` | `/api/agents` | Create a new agent profile |
+| `GET` | `/api/agents/{slug}` | Get full agent profile with recent memories |
+| `PUT` | `/api/agents/{slug}` | Update an agent profile |
+| `DELETE` | `/api/agents/{slug}` | Delete agent profile (cascades to memories + device assignments) |
 
-**GET /api/settings response:**
-```json
-{
-  "general": {
-    "honcho_mode": "cloud",
-    "honcho_url": "https://honcho.dev",
-    "honcho_workspace": "hermes",
-    "main_user_peer": "ron",
-    "mem0_mode": "managed",
-    "mem0_url": "http://localhost:8888"
-  },
-  "sync": {
-    "interval": 300,
-    "enabled": true
-  },
-  "server": {
-    "host": "0.0.0.0",
-    "port": 5001,
-    "cors_origins": ["*"]
-  },
-  "rate_limiting": {
-    "enabled": true,
-    "default_rpm": 60,
-    "default_rpd": 10000
-  },
-  "_meta": {
-    "sources": {
-      "general.honcho_mode": "database",
-      "general.honcho_url": "config_file",
-      "sync.interval": "default"
-    }
-  }
-}
-```
-
-**PUT /api/settings/{key} request:**
-```json
-{ "value": "cloud" }
-```
-
-**POST /api/settings/test request:**
-```json
-{
-  "type": "honcho",
-  "url": "https://honcho.dev",
-  "workspace": "hermes"
-}
-```
-
-**POST /api/settings/test response:**
-```json
-{
-  "status": "ok",
-  "message": "Honcho connection successful",
-  "latency_ms": 142
-}
-```
-
-#### Setup Wizard (Internal — New)
+#### Dreaming (Internal)
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/setup/status` | Check what's installed, what's missing, wizard state |
-| `POST` | `/api/setup/detect` | Auto-detect running services |
-| `POST` | `/api/setup/configure` | Apply wizard selections |
-| `POST` | `/api/setup/validate` | Validate a configuration before applying |
-
-**GET /api/setup/status response:**
-```json
-{
-  "wizard_completed": false,
-  "honcho": {
-    "installed": true,
-    "running": true,
-    "mode": "local",
-    "url": "http://localhost:8000",
-    "version": "0.3.1"
-  },
-  "mem0": {
-    "installed": true,
-    "running": true,
-    "mode": "postgresql",
-    "url": "http://localhost:8888",
-    "db_connected": true
-  },
-  "postgresql": {
-    "installed": true,
-    "running": true,
-    "version": "15.4",
-    "pgvector": true
-  },
-  "merrick": {
-    "version": "0.2.0",
-    "devices_registered": 0,
-    "sync_configured": true
-  }
-}
-```
-
-**POST /api/setup/detect response:**
-```json
-{
-  "detected": {
-    "hombre": { "status": "running", "port": 8000 },
-    "mem0": { "status": "running", "port": 8888 },
-    "postgresql": { "status": "running", "port": 5433 },
-    "pgvector": { "installed": true }
-  },
-  "recommendations": [
-    { "type": "info", "message": "All services detected. Ready to configure." }
-  ]
-}
-```
-
-**POST /api/setup/configure request:**
-```json
-{
-  "honcho_mode": "local",
-  "honcho_url": "http://localhost:8000",
-  "honcho_workspace": "hermes",
-  "mem0_mode": "postgresql",
-  "mem0_url": "http://localhost:8888",
-  "db_host": "localhost",
-  "db_port": 5433,
-  "db_user": "postgres",
-  "db_password": "secret",
-  "db_name": "postgres",
-  "main_user_peer": "ron",
-  "create_first_device": true,
-  "first_device_name": "My First Device"
-}
-```
-
-**POST /api/setup/configure response:**
-```json
-{
-  "status": "ok",
-  "settings_applied": 12,
-  "first_device": {
-    "id": "...",
-    "name": "My First Device",
-    "api_key": "mk_..."
-  },
-  "next_steps": [
-    "Save your API key: mk_...",
-    "Connect a device using: merrick connect --key mk_...",
-    "Dashboard is ready at http://localhost:5001"
-  ]
-}
-```
+| `POST` | `/api/dreaming/run` | Manually trigger a dreaming cycle |
+| `GET` | `/api/dreaming/stats` | Get compaction statistics |
 
 ---
 
@@ -838,23 +552,27 @@ All `/v1/*` routes require a valid API key via `Authorization: Bearer <key>`. Ra
 #### Middleware Chain for `/v1/*`
 
 ```
-Request → CORS → Rate Limiter → Auth Middleware → Route Handler
-                                 │
-                                 ├─ Validate Bearer token (SHA-256 hash lookup)
-                                 ├─ Identify device_id from key
-                                 ├─ Resolve scope permissions
-                                 ├─ Check rate limits (RPM + RPD)
-                                 ├─ Set request.state.device_id, request.state.scope
-                                 └─ Update last_used_at (async, non-blocking)
+Request → CORS → AuthMiddleware → Route Handler
+                                   │
+                                   ├─ Extract Bearer token (must start with merrick_sk_)
+                                   ├─ SHA-256 hash → lookup in api_keys WHERE active=true
+                                   ├─ Rate limit check (in-memory sliding window, 60s)
+                                   ├─ Permission check (write required for POST/PUT/DELETE/PATCH)
+                                   ├─ Inject request.state:
+                                   │    key_id, key_name, device_id, agent_slug,
+                                   │    load_memories, memory_categories,
+                                   │    memory_exclude_categories, memory_scope,
+                                   │    max_memory_tokens, permissions
+                                   └─ Update last_used_at (fire-and-forget)
 ```
 
 #### Memory (External — Device-Scoped)
 
-| Method | Path | Description | Scopes Required |
-|---|---|---|---|
-| `POST` | `/v1/memory/write` | Write a memory (scoped to device) | `memory.write` |
-| `POST` | `/v1/memory/search` | Search memories | `memory.read` |
-| `POST` | `/v1/memory/read` | Read a specific memory by ID | `memory.read` |
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/v1/memory/write` | Write a memory (scoped to device) |
+| `POST` | `/v1/memory/search` | Search memories |
+| `POST` | `/v1/memory/read` | Read a specific memory by ID |
 
 **POST /v1/memory/write request:**
 ```json
@@ -864,907 +582,529 @@ Request → CORS → Rate Limiter → Auth Middleware → Route Handler
 }
 ```
 
-**POST /v1/memory/write response:**
-```json
-{
-  "id": "abc-123",
-  "status": "ok",
-  "results": {
-    "mem0": { "success": true, "id": "mem0-456" },
-    "honcho": { "success": true, "id": "msg-789" }
-  }
-}
-```
+#### Query (External)
 
-**Note:** The `source` field is automatically set to the device's `device_type` or name. The `user_id` is set from the device's owner. No user_id override is allowed from external requests.
-
-**POST /v1/memory/search request:**
-```json
-{
-  "query": "dark mode preferences",
-  "limit": 10,
-  "device_filter": false
-}
-```
-
-**POST /v1/memory/search response:**
-```json
-{
-  "results": [
-    {
-      "id": "...",
-      "source": "mem0",
-      "data": "User prefers dark mode",
-      "device_id": "abc-123",
-      "score": 0.95
-    }
-  ],
-  "count": 1,
-  "device_id": "abc-123"
-}
-```
-
-When `device_filter: true`, only memories written by the requesting device are returned. Default is `false` (search all).
-
-**POST /v1/memory/read request:**
-```json
-{ "memory_id": "abc-123" }
-```
-
-**POST /v1/memory/read response:**
-```json
-{
-  "id": "abc-123",
-  "source": "mem0",
-  "data": "User prefers dark mode",
-  "user_id": "ron",
-  "device_id": "abc-123",
-  "metadata": { "source": "desktop", "merrick": true },
-  "created_at": "..."
-}
-```
-
-#### OpenAI-Compatible Endpoint
-
-| Method | Path | Description | Scopes Required |
-|---|---|---|---|
-| `POST` | `/v1/chat/completions` | Memory-augmented chat completion | `query.read` |
-
-**POST /v1/chat/completions request:**
-```json
-{
-  "model": "gpt-4",
-  "messages": [
-    { "role": "system", "content": "You are a helpful assistant." },
-    { "role": "user", "content": "What are my preferences?" }
-  ],
-  "temperature": 0.7,
-  "max_tokens": 1000
-}
-```
-
-**How it works:**
-1. Extract the user's last message from `messages`.
-2. Search both mem0 and Honcho for relevant memories matching the user message.
-3. Construct a memory context block from the search results.
-4. Prepend the memory context to the system message (or inject it as a system-level context message).
-5. Forward the augmented request to the configured upstream LLM API (OpenAI, Anthropic, etc.).
-6. Return the response from the upstream API, augmented with a `merrick_context` field.
-
-**POST /v1/chat/completions response (OpenAI-compatible):**
-```json
-{
-  "id": "chatcmpl-abc123",
-  "object": "chat.completion",
-  "created": 1690000000,
-  "model": "gpt-4",
-  "choices": [
-    {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "Based on your preferences, you prefer dark mode..."
-      },
-      "finish_reason": "stop"
-    }
-  ],
-  "usage": { "prompt_tokens": 523, "completion_tokens": 45, "total_tokens": 568 },
-  "merrick_context": {
-    "memories_injected": 3,
-    "memory_sources": ["mem0", "honcho"],
-    "device_id": "abc-123"
-  }
-}
-```
-
-**LLM provider configuration (stored in settings):**
-```
-llm.provider = "openai" | "anthropic" | "ollama" | "custom"
-llm.api_key = "sk-..."
-llm.api_url = "https://api.openai.com/v1" (or custom base URL)
-llm.default_model = "gpt-4"
-llm.temperature = 0.7
-llm.max_tokens = 4096
-```
-
-#### Device Self-Service (External)
-
-| Method | Path | Description | Scopes Required |
-|---|---|---|---|
-| `GET` | `/v1/device/info` | Get own device info | `device.read` |
-| `POST` | `/v1/device/ping` | Update last_seen_at, report metadata | `device.read` |
-
-**POST /v1/device/ping request:**
-```json
-{
-  "metadata": { "os": "android", "app_version": "2.1.0", "battery": 85 }
-}
-```
-
-**POST /v1/device/ping response:**
-```json
-{
-  "status": "ok",
-  "device_id": "abc-123",
-  "sync_enabled": true,
-  "rate_limit": { "rpm": 60, "rpd": 10000, "rpm_remaining": 55, "rpd_remaining": 9847 }
-}
-```
-
-#### Sync Status (External — Device-Scoped)
-
-| Method | Path | Description | Scopes Required |
-|---|---|---|---|
-| `GET` | `/v1/sync/status` | Sync status for this device | `sync.read` |
-
-**GET /v1/sync/status response:**
-```json
-{
-  "last_sync": { "..." },
-  "device_syncs": 5,
-  "total_syncs": 120,
-  "memories_written_by_device": 42
-}
-```
-
----
-
-## 4. Settings System
-
-### 4.1 Cascade Priority (Highest to Lowest)
-
-```
-1. Database overrides (settings table)     ← Dashboard writes here
-2. Config file (~/.merrick/config.json)     ← CLI / manual edits
-3. Environment variables (MERRICK_*)        ← Docker / systemd
-4. Hardcoded defaults                        ← Fallback
-```
-
-When a setting is read, the system checks in this order and returns the first value found.
-
-### 4.2 Settings Registry
-
-Every setting has a key, default value, type, and whether it's user-facing (editable in dashboard) or internal-only.
-
-| Key | Default | Type | User-Facing | Description |
-|---|---|---|---|---|
-| `general.honcho_mode` | `"local"` | `enum[local,cloud]` | Yes | Honcho backend selection |
-| `general.honcho_url` | `"http://localhost:8000"` | `string` | Yes | Honcho API base URL |
-| `general.honcho_cloud_url` | `"https://honcho.dev"` | `string` | No | Honcho Cloud URL (when mode=cloud) |
-| `general.honcho_workspace` | `"hermes"` | `string` | Yes | Honcho workspace name |
-| `general.main_user_peer` | `"ron"` | `string` | Yes | Default Honcho peer ID |
-| `general.mem0_mode` | `"postgresql"` | `enum[managed,postgresql]` | Yes | mem0 backend selection |
-| `general.mem0_url` | `"http://localhost:8888"` | `string` | Yes | mem0 API URL (when mode=managed) |
-| `general.mem0_email` | `""` | `string` | Yes | mem0 dashboard login (for managed mode) |
-| `general.mem0_password` | `""` | `secret` | Yes | mem0 dashboard password |
-| `sync.interval` | `300` | `integer` | Yes | Seconds between sync runs |
-| `sync.enabled` | `true` | `boolean` | Yes | Enable/disable background sync |
-| `sync.batch_size` | `100` | `integer` | No | Items per sync batch |
-| `server.host` | `"0.0.0.0"` | `string` | No | Bind address |
-| `server.port` | `5001` | `integer` | No | Listen port |
-| `server.cors_origins` | `["*"]` | `string[]` | No | CORS allowed origins |
-| `server.log_level` | `"INFO"` | `enum[DEBUG,INFO,WARNING,ERROR]` | Yes | Logging verbosity |
-| `rate_limiting.enabled` | `true` | `boolean` | Yes | Enable rate limiting for /v1/* |
-| `rate_limiting.default_rpm` | `60` | `integer` | Yes | Default requests per minute |
-| `rate_limiting.default_rpd` | `10000` | `integer` | Yes | Default requests per day |
-| `llm.provider` | `"openai"` | `enum[openai,anthropic,ollama,custom]` | Yes | LLM provider for /v1/chat/completions |
-| `llm.api_key` | `""` | `secret` | Yes | LLM API key |
-| `llm.api_url` | `""` | `string` | Yes | LLM API base URL (custom provider) |
-| `llm.default_model` | `"gpt-4"` | `string` | Yes | Default model name |
-| `llm.temperature` | `0.7` | `number` | Yes | Default temperature |
-| `llm.max_tokens` | `4096` | `integer` | Yes | Default max tokens |
-| `setup.completed` | `false` | `boolean` | No | Whether setup wizard has been completed |
-
-### 4.3 Implementation: `settings.py`
-
-```python
-# settings.py — Cascading settings with file → env → database → API overrides
-
-class SettingsManager:
-    """Manages Merrick settings with a cascading priority system.
-
-    Priority (highest to lowest):
-      1. Database overrides (settings table)
-      2. Config file (~/.merrick/config.json)
-      3. Environment variables (MERRICK_*)
-      4. Hardcoded defaults
-    """
-
-    def __init__(self):
-        self._defaults = { ... }  # The registry above
-        self._config_file = None  # Loaded once at startup
-        self._db_cache = {}       # Cached DB overrides, refreshed periodically
-
-    def get(self, key: str) -> Any:
-        """Resolve a setting value through the cascade."""
-
-    def set(self, key: str, value: Any, source: str = "api", updated_by: str = "dashboard"):
-        """Write an override to the database."""
-
-    def reset(self, key: str):
-        """Remove the database override, falling back to config file / env."""
-
-    def get_all(self) -> dict:
-        """Return all resolved settings with source metadata."""
-
-    def test_connection(self, setting_type: str, **kwargs) -> dict:
-        """Test a connection (Honcho, mem0, LLM) with the given params."""
-
-    def reload(self):
-        """Force reload from config file and database (clears caches)."""
-```
-
-### 4.4 Config File ↔ Database Interaction
-
-When the dashboard writes a setting:
-1. The API handler calls `settings.set(key, value)`.
-2. The settings manager writes to the `settings` table in PostgreSQL.
-3. The in-memory cache is updated immediately.
-4. Other settings reads see the new value instantly.
-
-When the CLI writes a config file:
-1. `merrick config set key value` writes to `~/.merrick/config.json`.
-2. On next settings reload (or process restart), the config file is re-read.
-3. Database overrides still take precedence.
-
-When the setup wizard runs:
-1. It writes all settings to the database AND the config file (for redundancy).
-2. It marks `setup.completed = true` in the database.
-
----
-
-## 5. One-Click Setup Flow
-
-### 5.1 First-Launch Detection
-
-On startup, Merrick checks:
-
-```python
-def check_setup_state():
-    if not settings.get("setup.completed"):
-        return {"state": "wizard_needed", "detected": detect_services()}
-    else:
-        return {"state": "ready"}
-```
-
-The dashboard displays a setup wizard overlay when `state == "wizard_needed"`.
-
-### 5.2 Wizard Steps
-
-#### Step 1: Welcome & Mode Selection
-
-```
-┌─────────────────────────────────────────────┐
-│         Welcome to Merrick                  │
-│     Universal Memory Daemon                 │
-│                                             │
-│  Merrick synchronizes memory between AI     │
-│  systems. Let's get you set up.             │
-│                                             │
-│  ┌─────────────────┐  ┌─────────────────┐  │
-│  │   Honcho Cloud   │  │  Honcho Local   │  │
-│  │                  │  │                  │  │
-│  │  Use honcho.dev  │  │  Run hombre on   │  │
-│  │  hosted service  │  │  this machine    │  │
-│  │                  │  │                  │  │
-│  │  [Select]        │  │  [Select]        │  │
-│  └─────────────────┘  └─────────────────┘  │
-└─────────────────────────────────────────────┘
-```
-
-**Logic:**
-- If Honcho Cloud is selected: prompt for `honcho.dev` credentials / API key.
-- If Honcho Local is selected: check if `hombre` is running on port 8000.
-  - If running: auto-detect and confirm.
-  - If not running: offer to install via `merrick install hombre` or Docker.
-
-#### Step 2: Memory Backend
-
-```
-┌─────────────────────────────────────────────┐
-│         Memory Backend                      │
-│                                             │
-│  ┌─────────────────┐  ┌─────────────────┐  │
-│  │   mem0 Managed   │  │  PostgreSQL     │  │
-│  │   (Docker)       │  │  Direct         │  │
-│  │                  │  │                  │  │
-│  │  mem0 runs in    │  │  Connect to any  │  │
-│  │  Docker, auto-   │  │  PostgreSQL +    │  │
-│  │  configured      │  │  pgvector DB     │  │
-│  │                  │  │                  │  │
-│  │  [Select]        │  │  [Select]        │  │
-│  └─────────────────┘  └─────────────────┘  │
-│                                             │
-│  Auto-detected: PostgreSQL running on 5433  │
-│  pgvector extension: installed              │
-└─────────────────────────────────────────────┘
-```
-
-**Logic:**
-- If mem0 Managed: check Docker availability, pull mem0 image, start container, configure connection.
-- If PostgreSQL Direct: prompt for host/port/user/password/database. Validate connection and pgvector extension.
-
-#### Step 3: Connection Details
-
-```
-┌─────────────────────────────────────────────┐
-│         Connection Details                  │
-│                                             │
-│  Honcho URL:  [http://localhost:8000    ]   │
-│  Workspace:   [hermes                 ]   │
-│  User Peer:   [ron                    ]   │
-│                                             │
-│  PostgreSQL Host:     [localhost       ]   │
-│  PostgreSQL Port:     [5433            ]   │
-│  PostgreSQL User:     [postgres        ]   │
-│  PostgreSQL Password: [••••••••••       ]   │
-│  PostgreSQL Database: [postgres        ]   │
-│                                             │
-│  [Test Connections]                         │
-│  ✅ Honcho: Connected (142ms)              │
-│  ✅ PostgreSQL: Connected (23ms)           │
-│  ✅ pgvector: Installed                    │
-│                                             │
-│           [Continue →]                      │
-└─────────────────────────────────────────────┘
-```
-
-#### Step 4: First Device
-
-```
-┌─────────────────────────────────────────────┐
-│         Register Your First Device          │
-│                                             │
-│  Device Name:  [My First Device       ]    │
-│  Device Type:  [Desktop  ▼]               │
-│                                             │
-│  ┌─────────────────────────────────────┐   │
-│  │  API Key (save this — shown once!)  │   │
-│  │                                     │   │
-│  │  mk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4  │   │
-│  │                                     │   │
-│  │  [Copy to Clipboard]               │   │
-│  └─────────────────────────────────────┘   │
-│                                             │
-│  Connect your device:                       │
-│  $ merrick connect --key mk_a1b2c3d4...    │
-│                                             │
-│           [Finish Setup →]                  │
-└─────────────────────────────────────────────┘
-```
-
-### 5.3 Auto-Detection Logic
-
-```python
-def detect_services():
-    results = {}
-
-    # Check PostgreSQL
-    try:
-        conn = psycopg2.connect(host="localhost", port=5433, ...)
-        cur = conn.cursor()
-        cur.execute("SELECT version()")
-        results["postgresql"] = {
-            "status": "running",
-            "version": cur.fetchone()[0],
-            "pgvector": check_pgvector(cur),
-            "port": 5433
-        }
-        conn.close()
-    except:
-        results["postgresql"] = {"status": "not_found"}
-
-    # Check Honcho (hombre)
-    try:
-        resp = httpx.get("http://localhost:8000/health", timeout=2)
-        results["honcho"] = {
-            "status": "running",
-            "url": "http://localhost:8000",
-            "version": resp.headers.get("X-Version", "unknown")
-        }
-    except:
-        results["honcho"] = {"status": "not_found"}
-
-    # Check mem0
-    try:
-        resp = httpx.get("http://localhost:8888/health", timeout=2)
-        results["mem0"] = {
-            "status": "running",
-            "url": "http://localhost:8888"
-        }
-    except:
-        results["mem0"] = {"status": "not_found"}
-
-    # Check Docker (for mem0 managed mode)
-    try:
-        subprocess.run(["docker", "info"], capture_output=True, check=True)
-        results["docker"] = {"status": "available"}
-    except:
-        results["docker"] = {"status": "not_found"}
-
-    # Check systemd/launchd (for system app mode)
-    if platform.system() == "Linux":
-        try:
-            subprocess.run(["systemctl", "--user", "status", "merrick"],
-                         capture_output=True)
-            results["systemd"] = {"status": "available"}
-        except:
-            results["systemd"] = {"status": "not_found"}
-
-    return results
-```
-
----
-
-## 6. Config File Structure
-
-### 6.1 Location
-
-`~/.merrick/config.json` (user-level) or `/etc/merrick/config.json` (system-level).
-
-### 6.2 Schema
-
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Merrick Configuration",
-  "type": "object",
-  "properties": {
-    "general": {
-      "type": "object",
-      "properties": {
-        "honcho_mode": { "type": "string", "enum": ["local", "cloud"], "default": "local" },
-        "honcho_url": { "type": "string", "default": "http://localhost:8000" },
-        "honcho_cloud_url": { "type": "string", "default": "https://honcho.dev" },
-        "honcho_workspace": { "type": "string", "default": "hermes" },
-        "main_user_peer": { "type": "string", "default": "ron" },
-        "mem0_mode": { "type": "string", "enum": ["managed", "postgresql"], "default": "postgresql" },
-        "mem0_url": { "type": "string", "default": "http://localhost:8888" },
-        "mem0_email": { "type": "string", "default": "" },
-        "mem0_password": { "type": "string", "default": "" }
-      }
-    },
-    "database": {
-      "type": "object",
-      "properties": {
-        "host": { "type": "string", "default": "localhost" },
-        "port": { "type": "integer", "default": 5433 },
-        "user": { "type": "string", "default": "postgres" },
-        "password": { "type": "string", "default": "" },
-        "name": { "type": "string", "default": "postgres" },
-        "pool_min": { "type": "integer", "default": 2 },
-        "pool_max": { "type": "integer", "default": 10 }
-      }
-    },
-    "sync": {
-      "type": "object",
-      "properties": {
-        "interval": { "type": "integer", "default": 300 },
-        "enabled": { "type": "boolean", "default": true },
-        "batch_size": { "type": "integer", "default": 100 }
-      }
-    },
-    "server": {
-      "type": "object",
-      "properties": {
-        "host": { "type": "string", "default": "0.0.0.0" },
-        "port": { "type": "integer", "default": 5001 },
-        "cors_origins": { "type": "array", "items": { "type": "string" }, "default": ["*"] },
-        "log_level": { "type": "string", "enum": ["DEBUG", "INFO", "WARNING", "ERROR"], "default": "INFO" }
-      }
-    },
-    "rate_limiting": {
-      "type": "object",
-      "properties": {
-        "enabled": { "type": "boolean", "default": true },
-        "default_rpm": { "type": "integer", "default": 60 },
-        "default_rpd": { "type": "integer", "default": 10000 }
-      }
-    },
-    "llm": {
-      "type": "object",
-      "properties": {
-        "provider": { "type": "string", "enum": ["openai", "anthropic", "ollama", "custom"], "default": "openai" },
-        "api_key": { "type": "string", "default": "" },
-        "api_url": { "type": "string", "default": "" },
-        "default_model": { "type": "string", "default": "gpt-4" },
-        "temperature": { "type": "number", "default": 0.7 },
-        "max_tokens": { "type": "integer", "default": 4096 }
-      }
-    }
-  }
-}
-```
-
-### 6.3 Example Config File
-
-```json
-{
-  "general": {
-    "honcho_mode": "local",
-    "honcho_url": "http://localhost:8000",
-    "honcho_workspace": "hermes",
-    "main_user_peer": "ron",
-    "mem0_mode": "postgresql",
-    "mem0_url": "http://localhost:8888"
-  },
-  "database": {
-    "host": "localhost",
-    "port": 5433,
-    "user": "postgres",
-    "password": "",
-    "name": "postgres"
-  },
-  "sync": {
-    "interval": 300,
-    "enabled": true
-  },
-  "server": {
-    "host": "0.0.0.0",
-    "port": 5001,
-    "log_level": "INFO"
-  },
-  "llm": {
-    "provider": "openai",
-    "api_key": "",
-    "default_model": "gpt-4"
-  }
-}
-```
-
----
-
-## 7. Dependencies
-
-### 7.1 New Python Packages
-
-| Package | Version | Purpose |
+| Method | Path | Description |
 |---|---|---|
-| `pydantic-settings` | `^2.0` | Settings validation and cascade (extends FastAPI's Pydantic) |
-| `click` | `^8.0` | CLI framework for `merrick` command |
-| `rich` | `^13.0` | Pretty CLI output (tables, progress, colors) |
-| `tenacity` | `^8.0` | Retry logic for API calls (Honcho, mem0, LLM) |
-| `apscheduler` | `^3.10` | Background sync scheduling (replaces raw threading) |
+| `POST` | `/v1/query` | Cross-system search (mem0 + Honcho) |
 
-### 7.2 Updated `requirements.txt`
+#### Agents (External)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/v1/agents` | List available agent profiles (filtered by key's agent scope) |
+| `GET` | `/v1/agents/{slug}` | Get agent profile with memories (token-budget-aware truncation) |
+
+**GET /v1/agents/{slug} response:**
+```json
+{
+  "profile": { "id": "...", "name": "Hermes", "slug": "hermes", "system_prompt": "...", ... },
+  "memories": [
+    { "id": "...", "content": "User prefers dark mode", "category": "preferences", ... }
+  ],
+  "memory_count": 5,
+  "tokens_used": 1234,
+  "max_memory_tokens": 2000
+}
+```
+
+Memories are truncated to fit within `max_memory_tokens` from the API key. Token estimation: ~4 chars per token.
+
+**Memory loading behavior by `memory_scope`:**
+| Scope | Behavior |
+|---|---|
+| `shared` | Loads from global `memories` table, filtered by `memory_categories` |
+| `agent_only` | Loads from `agent_memories` table for this agent |
+| `both` | Loads from both tables, combined |
+
+#### Agent Memory (External)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/v1/agents/{slug}/memory` | Write a memory to a specific agent |
+| `POST` | `/v1/agents/{slug}/memory/search` | Search agent memories by full-text query |
+
+**POST /v1/agents/{slug}/memory request:**
+```json
+{
+  "content": "User asked about API rates",
+  "category": "support"
+}
+```
+
+---
+
+## 4. Auth Middleware
+
+### 4.1 Scope: `/v1/*` Only
+
+The `AuthMiddleware` in `middleware/auth.py` intercepts only requests starting with `/v1/`. Internal `/api/*` routes bypass auth entirely.
+
+### 4.2 Flow
+
+1. **Extract** — Bearer token from `Authorization` header
+2. **Validate format** — Must start with `merrick_sk_`
+3. **Hash** — `SHA-256(token)` → lookup in `api_keys WHERE key_hash = %s AND active = true`
+4. **Rate limit** — In-memory sliding window per key_id. 60-second window. Returns `429` with `retry_after: 60` when exceeded.
+5. **Permission check** — For POST/PUT/DELETE/PATCH, the key must have `write` in its `permissions` array
+6. **Inject** — All key properties set on `request.state`
+7. **Update** — `last_used_at = NOW()` (fire-and-forget, best-effort)
+
+### 4.3 `request.state` Fields
+
+After successful auth, the following fields are available to route handlers:
+
+| Field | Type | Source Column | Description |
+|---|---|---|---|
+| `key_id` | `str` | `api_keys.id` | UUID of the API key |
+| `key_name` | `str` | `api_keys.key_name` | Human-readable key name |
+| `device_id` | `str` | `api_keys.device_id` | Device identifier bound to this key |
+| `agent_slug` | `str \| None` | `api_keys.agent_slug` | Agent slug if key is agent-scoped |
+| `load_memories` | `bool` | `api_keys.load_memories` | Whether to load memories for this key |
+| `memory_categories` | `list[str] \| None` | `api_keys.memory_categories` | Category filter for memory loading |
+| `memory_exclude_categories` | `list[str]` | `api_keys.memory_exclude_categories` | Categories to exclude |
+| `memory_scope` | `str` | `api_keys.memory_scope` | `"shared"`, `"agent_only"`, or `"both"` |
+| `max_memory_tokens` | `int` | `api_keys.max_memory_tokens` | Token budget for agent memory loading |
+| `permissions` | `list[str]` | `api_keys.permissions` | `["read"]`, `["write"]`, or `["read", "write"]` |
+
+### 4.4 Rate Limiting
+
+In-memory sliding window. No Redis. No DB persistence across restarts. Good enough for a local daemon.
+
+```python
+_rate_limits: dict[str, list[float]] = defaultdict(list)
+RATE_WINDOW = 60  # seconds
+```
+
+When `len(timestamps within window) >= rate_limit`, returns `429`.
+
+---
+
+## 5. Configuration System
+
+### 5.1 Flat Environment Variables
+
+There is no cascading settings system, no config file, no database settings table. Configuration is loaded from environment variables via `config.py` at import time using `os.getenv()`.
+
+### 5.2 Environment Variables
+
+| Env Var | Default | Description |
+|---|---|---|
+| `MERRICK_DB_HOST` | `host.docker.internal` | PostgreSQL host |
+| `MERRICK_DB_PORT` | `5433` | PostgreSQL port |
+| `MERRICK_DB_USER` | `postgres` | PostgreSQL user |
+| `MERRICK_DB_PASSWORD` | `""` | PostgreSQL password |
+| `MERRICK_DB_NAME` | `postgres` | PostgreSQL database name |
+| `MERRICK_HONCHO_URL` | `http://host.docker.internal:8000` | Honcho API base URL |
+| `MERRICK_HONCHO_WORKSPACE` | `hermes` | Honcho workspace name |
+| `MERRICK_HONCHO_USER_PEER` | `ron` | Default Honcho peer ID |
+| `MERRICK_MEM0_API_URL` | `http://host.docker.internal:8888` | mem0 API URL |
+| `MERRICK_MEM0_EMAIL` | `""` | mem0 dashboard login |
+| `MERRICK_MEM0_PASSWORD` | `""` | mem0 dashboard password |
+| `MERRICK_SYNC_INTERVAL` | `300` | Seconds between sync runs |
+| `MERRICK_SYNC_ENABLED` | `true` | Enable/disable background sync |
+| `MERRICK_DREAMING_ENABLED` | `true` | Enable/disable dreaming engine |
+| `MERRICK_DREAMING_INTERVAL` | `3600` | Seconds between dreaming cycles (1 hour) |
+| `MERRICK_DREAMING_STALE_DAYS` | `90` | Days before a memory is considered stale |
+| `MERRICK_DREAMING_SIMILARITY_THRESHOLD` | `0.7` | Jaccard + word overlap threshold for dedup |
+
+### 5.3 Additional Config (MCP Server)
+
+| Env Var | Default | Description |
+|---|---|---|
+| `MERRICK_URL` | `http://localhost:5001` | Merrick API URL (used by MCP server and CLI) |
+| `MERRICK_API_KEY` | `""` | API key for MCP server authentication |
+
+### 5.4 Additional Config (CLI)
+
+| Env Var | Default | Description |
+|---|---|---|
+| `MERRICK_URL` | `http://localhost:5001` | Merrick API URL |
+| `MERRICK_CLI_TIMEOUT` | `30` | HTTP request timeout in seconds |
+
+---
+
+## 6. Dreaming Engine
+
+### 6.1 Purpose
+
+The dreaming engine (`dreaming.py`) is a background memory compaction loop that periodically runs to prevent prompt pollution. It marks memories as **compacted** rather than deleting them, so users can recover anything that was touched.
+
+### 6.2 Background Thread
+
+Started in `app.py` lifespan when `config.DREAMING_ENABLED` is true. Runs in a daemon thread at `config.DREAMING_INTERVAL` (default: 3600s / 1 hour).
+
+### 6.3 Compaction Phases
+
+Each dreaming cycle runs four phases in order:
+
+#### Phase 1: Deduplication
+
+Scans all non-compacted memories for duplicates using:
+- **Exact match** after normalization (lowercase, strip punctuation, remove stop words)
+- **Fuzzy match** using combined Jaccard similarity + word overlap ratio
+
+Both metrics must exceed `DREAMING_SIMILARITY_THRESHOLD` (default: 0.7) to flag a duplicate. The older memory is marked compacted; the newer one is kept.
+
+#### Phase 2: Contradiction Detection
+
+Finds memories with similar topic openers (first ~10 words) but different full content. This catches cases like:
+- "Project deadline is July 25" vs "Project deadline is August 1"
+
+Topic similarity must be >= 0.6, full content similarity must be < 0.8. The older memory is marked compacted with `superseded_by` pointing to the newer one.
+
+#### Phase 3: Staleness Detection
+
+Finds memories older than `DREAMING_STALE_DAYS` (default: 90) that haven't been accessed recently. Marks them as compacted with reason `"stale"`.
+
+#### Phase 4: Agent Memory Compaction
+
+Runs deduplication and staleness (30-day threshold) on the `agent_memories` table separately.
+
+### 6.4 Compaction Metadata
+
+When a memory is compacted, its payload/context JSONB gets these fields added:
+
+```json
+{
+  "compacted": true,
+  "compacted_at": "2026-07-13T12:00:00Z",
+  "compacted_reason": "duplicate",
+  "compacted_from": ["uuid-of-kept-memory"],
+  "similarity_score": 0.95
+}
+```
+
+Reasons: `"duplicate"`, `"contradiction"`, `"stale"`.
+
+### 6.5 Manual Trigger
+
+```bash
+POST /api/dreaming/run
+GET  /api/dreaming/stats
+```
+
+---
+
+## 7. Agent System
+
+### 7.1 Agent Profiles
+
+Agents are defined in `agent_profiles` with a name, slug (URL-safe identifier), system prompt, personality JSONB, optional custom instructions, and a memory scope.
+
+Agents are created via the internal API:
+
+```bash
+POST /api/agents
+{
+  "name": "Hermes",
+  "slug": "hermes",
+  "system_prompt": "You are Hermes, a helpful AI assistant...",
+  "personality": { "tone": "friendly", "style": "concise" },
+  "custom_instructions": "Always refer to the user as 'sir'",
+  "memory_scope": "shared"
+}
+```
+
+### 7.2 Memory Scopes
+
+| Scope | What the agent can see |
+|---|---|
+| `shared` | Global memories from the `memories` table (via mem0 sync) |
+| `agent_only` | Only memories written to `agent_memories` for this specific agent |
+| `both` | Both shared and agent-specific memories, combined |
+
+### 7.3 Key-Agent Binding
+
+API keys can be bound to a specific agent via `agent_slug`. When a key is agent-scoped:
+
+- `GET /v1/agents` returns only that agent
+- `GET /v1/agents/{slug}` is denied if `slug != key's agent_slug`
+- `POST /v1/agents/{slug}/memory` is denied if `slug != key's agent_slug`
+
+### 7.4 External Agent Endpoint
+
+`GET /v1/agents/{slug}` is the main endpoint devices call. It returns the agent profile plus its memories, truncated to fit within `max_memory_tokens`.
+
+Token budget truncation: memories are added in order (most recent first) until the token budget is exhausted. Token estimation: `len(content) // 4`.
+
+### 7.5 Agent Memory Search
+
+`POST /v1/agents/{slug}/memory/search` performs PostgreSQL full-text search on `agent_memories.content` using `plainto_tsquery('simple', ...)`. Results are filtered by the key's `memory_categories` and `memory_exclude_categories`.
+
+---
+
+## 8. Device Provisioning
+
+### 8.1 Auto-Provisioning
+
+When a new `device_id` hits any `/v1/*` endpoint, the provisioning module (`provisioning.py`) automatically:
+
+1. Checks if `device_id` exists in `device_identities`
+2. If not, derives storage IDs:
+   - `honcho_peer_id = "device_{safe_device_id}"`
+   - `mem0_user_id = "device_{safe_device_id}"`
+3. Creates a Honcho peer via `POST /v3/workspaces/{workspace}/peers` (non-fatal if it fails)
+4. Stores the mapping in `device_identities`
+5. Returns the device's storage IDs for use in write/query
+
+### 8.2 Caching
+
+A thread-safe in-memory cache (`dict`) prevents repeated DB lookups. Cache is populated on first access and updated with `last_seen_at` on each request.
+
+### 8.3 Fallback
+
+If `device_id` is `"unknown"` or empty, the global `HONCHO_USER_PEER` is used as the fallback identity.
+
+---
+
+## 9. MCP Server
+
+### 9.1 Purpose
+
+The MCP (Model Context Protocol) server (`mcp_server/`) exposes Merrick's memory system as tools and resources for any MCP-compatible client: LM Studio, Claude Desktop, VS Code, etc.
+
+### 9.2 Architecture
 
 ```
-fastapi==0.138.0
-uvicorn[standard]==0.49.0
-httpx==0.28.1
-psycopg2-binary==2.9.10
-python-multipart==0.0.20
-pydantic-settings>=2.0.0
-click>=8.0.0
-rich>=13.0.0
-tenacity>=8.0.0
-apscheduler>=3.10.0
+MCP Client (LM Studio, Claude Desktop)
+    │
+    │  stdio transport
+    │
+    ▼
+mcp_server/server.py (MCPServer)
+    │
+    │  httpx (async)
+    │
+    ▼
+Merrick HTTP API (localhost:5001)
 ```
 
-### 7.3 New Files to Create
+The MCP server does **not** access the database directly. It talks to Merrick over HTTP, keeping it clean, stateless, and capable of connecting to remote instances.
+
+### 9.3 Running
+
+```bash
+python -m mcp_server          # stdio transport (default)
+mcp run mcp_server/server.py  # via MCP CLI
+```
+
+### 9.4 Configuration
+
+| Env Var | Default | Description |
+|---|---|---|
+| `MERRICK_URL` | `http://localhost:5001` | Merrick API URL |
+| `MERRICK_API_KEY` | `""` | API key (optional, for authenticated endpoints) |
+
+### 9.5 Tools
+
+| Tool | Description |
+|---|---|
+| `write_memory` | Write a memory to Merrick (via mem0 + Honcho). Params: `content`, `source`, `categories`. |
+| `search_memories` | Search memories by query. Params: `query`, `categories`, `limit`. |
+| `list_memories` | List recent memories. Params: `limit`, `category`. |
+| `get_memory` | Get a specific memory by ID. Note: fetches all and filters (no per-memory GET endpoint). |
+| `delete_memory` | Currently unsupported — returns an error with guidance. |
+| `get_status` | Get Merrick health status (read-only). |
+
+### 9.6 Resources
+
+| Resource URI | Description |
+|---|---|
+| `merrick://status` | Merrick health status as JSON (same as `get_status`). |
+| `merrick://memories` | 20 most recent memories as JSON. |
+
+### 9.7 Files
 
 | File | Purpose |
 |---|---|
-| `settings.py` | Settings manager with cascade logic |
-| `mem0_client.py` | Dedicated mem0 HTTP client (replaces inline httpx in routes/memory.py and sync.py) |
-| `middleware/__init__.py` | Middleware package |
-| `middleware/auth.py` | API key validation, device identification |
-| `middleware/ratelimit.py` | Per-key rate limiting (token bucket) |
-| `middleware/requestlog.py` | Request logging middleware |
-| `services/__init__.py` | Services package |
-| `services/devices.py` | Device registry operations |
-| `services/keys.py` | API key management (create, rotate, revoke) |
-| `services/settings.py` | Settings service (thin wrapper around settings.py for route handlers) |
-| `services/setup.py` | Setup wizard detection and configuration |
-| `services/llm.py` | OpenAI-compatible chat completion proxy |
-| `cli.py` | Click-based CLI entrypoint |
-| `cli_commands/__init__.py` | CLI commands package |
-| `cli_commands/serve.py` | `merrick serve` / `merrick stop` / `merrick status` |
-| `cli_commands/config.py` | `merrick config set/show` |
-| `cli_commands/keys.py` | `merrick keys create/list/revoke/rotate` |
-| `cli_commands/devices.py` | `merrick devices list/show/remove` |
-| `cli_commands/memory.py` | `merrick memory write/search/export` |
-| `cli_commands/sync.py` | `merrick sync trigger/status/history` |
-| `routes/devices.py` | Device management routes (/api/devices) |
-| `routes/keys.py` | API key management routes (/api/devices/{id}/keys) |
-| `routes/settings.py` | Settings routes (/api/settings) |
-| `routes/setup.py` | Setup wizard routes (/api/setup) |
-| `routes/v1/__init__.py` | External API package |
-| `routes/v1/memory.py` | External memory routes (/v1/memory/*) |
-| `routes/v1/chat.py` | OpenAI-compatible endpoint (/v1/chat/completions) |
-| `routes/v1/device.py` | Device self-service routes (/v1/device/*) |
-| `routes/v1/sync.py` | External sync status (/v1/sync/status) |
-| `schema/migrations.py` | Database migration runner |
+| `mcp_server/server.py` | MCPServer setup, tool/resource handlers, lifespan |
+| `mcp_server/client.py` | Async HTTP client (`httpx`) for Merrick API |
+| `mcp_server/config.py` | Environment variable loading |
+| `mcp_server/__main__.py` | Entry point for `python -m mcp_server` |
 
-### 7.4 Files to Modify
+---
 
-| File | Changes |
+## 10. CLI
+
+### 10.1 Purpose
+
+The CLI (`merrick_cli/`) provides a terminal interface for managing Merrick. Built with Click + Rich. Talks to Merrick over HTTP (same API as the dashboard).
+
+### 10.2 Commands
+
+| Command | Description |
 |---|---|
-| `app.py` | Register new routers (internal + external), add auth middleware for /v1/*, update lifespan |
-| `config.py` | Add new env vars (LLM, server, rate limiting), load from config file |
-| `database.py` | Add new tables to init_schema(), add migration support |
-| `sync.py` | Refactor to use mem0_client, add device-scoped sync, update sync_log schema |
-| `honcho.py` | Add device peer creation, session prefix support, cloud auth |
-| `routes/memory.py` | Refactor to use mem0_client, add device tracking via device_memory_links |
-| `routes/query.py` | Add device-scoped filtering |
-| `routes/analytics.py` | Add device breakdown endpoint |
-| `routes/export.py` | Add full backup endpoint |
-| `routes/webhooks.py` | Expand event types (device.registered, key.rotated, sync.completed) |
-| `static/app.js` | Complete rewrite for new dashboard tabs (pipe system theme) |
-| `static/style.css` | Complete rewrite for pipe system theme |
-| `static/index.html` | Complete rewrite for new tab structure |
-| `docker-compose.yml` | Update for multi-service stack (optional) |
-| `Dockerfile` | Add CLI entrypoint, install click/rich |
-| `AGENT.md` | Update for new architecture |
-| `schema/merrick.sql` | Update with all tables (sync state, sync_log, categories, memory_categories, webhooks, analytics, device_peers, api_keys, settings, device_memory_links, schema_version) |
+| `merrick status` | Show health status and memory/session counts |
+| `merrick devices` | List all provisioned devices |
+| `merrick keys list` | List all API keys |
+| `merrick keys create` | Create a new API key (interactive prompts) |
+| `merrick memory write <content>` | Write a memory |
+| `merrick memory search <query>` | Search memories |
+| `merrick memory export` | Export all memories as JSON |
+| `merrick sync` | Trigger a manual sync and show status |
+| `merrick doctor` | Check if Merrick is running and diagnose issues |
+
+### 10.3 Configuration
+
+| Env Var | Default | Description |
+|---|---|---|
+| `MERRICK_URL` | `http://localhost:5001` | Merrick API URL |
+| `MERRICK_CLI_TIMEOUT` | `30` | HTTP request timeout in seconds |
+
+Can also be overridden with `--url` flag on the root command.
+
+### 10.4 Files
+
+| File | Purpose |
+|---|---|
+| `merrick_cli/main.py` | Click command definitions |
+| `merrick_cli/client.py` | Sync HTTP client (`httpx`) for Merrick API |
+| `merrick_cli/config.py` | Environment variable loading |
 
 ---
 
-## 8. Phased Implementation Plan
+## 11. Docker
 
-### Phase 1: Foundation (Settings + Config + Auth)
-**Goal:** Settings system works, API keys work, external devices can authenticate.
+### 11.1 Standalone: `docker-compose.yml`
 
-**Deploys independently:** Yes — existing `/api/*` routes remain unauthenticated. New `/v1/*` routes are gated by auth middleware but nothing breaks.
+Runs **PostgreSQL (pgvector) + Merrick only**. For users who already run Honcho and/or mem0 elsewhere.
 
-| Task | Files | Effort |
-|---|---|---|
-| Create `settings.py` with cascade logic | `settings.py` | Medium |
-| Add config file loading to `config.py` | `config.py` | Small |
-| Create `~/.merrick/config.json` schema | `config.py` | Small |
-| Create `device_peers` table | `database.py` | Small |
-| Create `api_keys` table | `database.py` | Small |
-| Create `settings` table | `database.py` | Small |
-| Create `schema_version` table + migration runner | `database.py`, `schema/migrations.py` | Medium |
-| Create `middleware/auth.py` | `middleware/auth.py` | Medium |
-| Create `middleware/ratelimit.py` | `middleware/ratelimit.py` | Medium |
-| Create `services/keys.py` (SHA-256 hashing, create/rotate/revoke) | `services/keys.py` | Medium |
-| Create `routes/devices.py` (internal device CRUD) | `routes/devices.py` | Medium |
-| Create `routes/keys.py` (internal key management) | `routes/keys.py` | Medium |
-| Create `routes/settings.py` (internal settings CRUD) | `routes/settings.py` | Medium |
-| Wire auth middleware on /v1/* in app.py | `app.py` | Small |
-| Add `mem0_client.py` (extract from routes/memory.py) | `mem0_client.py` | Small |
+```bash
+cp .env.example .env    # edit with your values
+docker compose up -d --build
+docker compose logs -f merrick
+```
 
-### Phase 2: External API (Device-Scoped Memory)
-**Goal:** External devices can write and search memories via `/v1/*`.
+Services:
+| Service | Image | Port | Purpose |
+|---|---|---|---|
+| `postgres` | `pgvector/pgvector:pg17` | `5433:5432` | PostgreSQL with pgvector |
+| `merrick` | Built from `./Dockerfile` | `5001:5001` | Merrick daemon |
 
-**Deploys independently:** Yes — external devices can authenticate and use memory endpoints. Dashboard still works as before.
+External services (Honcho, mem0) are expected to be reachable via `host.docker.internal`.
 
-| Task | Files | Effort |
-|---|---|---|
-| Create `device_memory_links` table | `database.py` | Small |
-| Create `routes/v1/memory.py` (write + search + read) | `routes/v1/memory.py` | Medium |
-| Create `routes/v1/device.py` (info + ping) | `routes/v1/device.py` | Small |
-| Create `routes/v1/sync.py` (device-scoped status) | `routes/v1/sync.py` | Small |
-| Update `routes/memory.py` to track device_memory_links | `routes/memory.py` | Small |
-| Update `routes/query.py` to support device filtering | `routes/query.py` | Small |
-| Update `sync.py` to use mem0_client | `sync.py` | Small |
-| Update `honcho.py` with device peer support | `honcho.py` | Medium |
-| Update webhooks with new event types | `routes/webhooks.py` | Small |
-| Update analytics with device breakdown | `routes/analytics.py` | Small |
-| Add device analytics endpoint to internal API | `routes/analytics.py` | Small |
+### 11.2 Full Stack: `docker-compose.full.yml`
 
-### Phase 3: Dashboard Redesign (Pipe System Theme)
-**Goal:** New dashboard with pipe visualization, device management, settings UI.
+Runs **everything**: PostgreSQL, Redis, Honcho API, Honcho Deriver, mem0, and Merrick.
 
-**Deploys independently:** Yes — new dashboard is a static file replacement. Backend is already in place from Phases 1-2.
+```bash
+docker compose -f docker-compose.full.yml up -d --build
+docker compose -f docker-compose.full.yml logs -f merrick
+```
 
-| Task | Files | Effort |
-|---|---|---|
-| Redesign `static/index.html` with new tab structure | `static/index.html` | Large |
-| Rewrite `static/style.css` with pipe system theme | `static/style.css` | Large |
-| Rewrite `static/app.js` with new tabs + API calls | `static/app.js` | Large |
-| Tab: Overview (pipe visualization with animated flow) | `static/*` | Large |
-| Tab: Devices & API Keys (CRUD UI) | `static/*` | Medium |
-| Tab: Settings → General (backend config) | `static/*` | Medium |
-| Tab: Settings → Developer (server, rate limits, webhooks) | `static/*` | Medium |
-| Tab: Sync Monitor (live status, history) | `static/*` | Medium |
-| Tab: Analytics (per-device breakdown) | `static/*` | Medium |
-| Tab: Export (download configs, memories, full backup) | `static/*` | Small |
-| Add full backup endpoint to export routes | `routes/export.py` | Small |
+Services:
+| Service | Image/Build | Port | Purpose |
+|---|---|---|---|
+| `postgres` | `pgvector/pgvector:pg17` | `5433:5432` | PostgreSQL with pgvector |
+| `redis` | `redis:alpine` | — | Honcho caching |
+| `honcho-api` | Built from `/home/reposed/docker/honcho` | `8000:8000` | Honcho API |
+| `honcho-deriver` | Built from `/home/reposed/docker/honcho` | — | Honcho background worker |
+| `mem0` | Built from `/home/reposed/docker/mem0` | `8888:8000` | mem0 memory API |
+| `merrick` | Built from `./Dockerfile` | `5001:5001` | Merrick daemon |
 
-### Phase 4: Setup Wizard + CLI
-**Goal:** One-click setup, `merrick` CLI for all operations.
+**NOTE:** Stop any existing Honcho/mem0 containers first:
+```bash
+docker stop honcho-api-1 honcho-deriver-1 mem0-api 2>/dev/null
+```
 
-**Deploys independently:** Yes — wizard is optional (skip if settings.completed = true). CLI is a separate entrypoint.
+### 11.3 Health Checks
 
-| Task | Files | Effort |
-|---|---|---|
-| Create `services/setup.py` (detect + configure) | `services/setup.py` | Medium |
-| Create `routes/setup.py` (wizard API) | `routes/setup.py` | Medium |
-| Wizard UI in dashboard (step-by-step overlay) | `static/*` | Medium |
-| Create `cli.py` with Click | `cli.py` | Medium |
-| `merrick serve` / `merrick stop` / `merrick status` | `cli_commands/serve.py` | Medium |
-| `merrick config set/show` | `cli_commands/config.py` | Small |
-| `merrick keys create/list/revoke/rotate` | `cli_commands/keys.py` | Medium |
-| `merrick devices list/show/remove` | `cli_commands/devices.py` | Medium |
-| `merrick memory write/search/export` | `cli_commands/memory.py` | Medium |
-| `merrick sync trigger/status/history` | `cli_commands/sync.py` | Medium |
-| Add `[project.scripts]` to pyproject.toml for `merrick` command | `pyproject.toml` | Small |
-
-### Phase 5: OpenAI-Compatible Endpoint + LLM Integration
-**Goal:** `/v1/chat/completions` for memory-augmented generation.
-
-**Deploys independently:** Yes — requires LLM settings to be configured, gracefully degrades without them.
-
-| Task | Files | Effort |
-|---|---|---|
-| Create `services/llm.py` (LLM provider abstraction) | `services/llm.py` | Large |
-| Create `routes/v1/chat.py` (OpenAI-compatible endpoint) | `routes/v1/chat.py` | Medium |
-| Add LLM settings to settings registry | `settings.py` | Small |
-| Add LLM provider UI in Settings → Developer | `static/*` | Medium |
-| Support OpenAI, Anthropic, Ollama, custom providers | `services/llm.py` | Large |
-| Memory injection logic (search → inject → forward) | `services/llm.py` | Medium |
-
-### Phase 6: Docker Compose Full Stack + Packaging
-**Goal:** `docker compose up` brings up Merrick + Honcho + mem0 + PostgreSQL. Installable as a system package.
-
-**Deploys independently:** Yes — full stack is optional (single-container mode still works).
-
-| Task | Files | Effort |
-|---|---|---|
-| Multi-service docker-compose.yml | `docker-compose.yml` | Medium |
-| Honcho (hombre) service definition | `docker-compose.yml` | Medium |
-| mem0 service definition | `docker-compose.yml` | Medium |
-| PostgreSQL + pgvector service definition | `docker-compose.yml` | Small |
-| Shared volume for database data | `docker-compose.yml` | Small |
-| Health checks for all services | `docker-compose.yml` | Small |
-| `merrick install` command (systemd/launchd) | `cli_commands/serve.py` | Medium |
-| `merrick uninstall` command | `cli_commands/serve.py` | Small |
-| Create `pyproject.toml` with proper packaging | `pyproject.toml` | Small |
-| Publish to PyPI (optional) | — | Small |
+Both compose files include health checks:
+- **PostgreSQL:** `pg_isready`
+- **Honcho:** HTTP GET `/health`
+- **mem0:** HTTP GET `/health`
+- **Merrick:** Python `urllib` GET `/api/health`
+- **Redis:** `redis-cli ping`
 
 ---
 
-## Appendix A: File Tree After All Phases
+## 12. Current Status
+
+Merrick v2.0 is a **working daemon** with the following implemented and operational:
+
+### What Works
+
+- **Core memory bridge:** Bidirectional sync between mem0 and Honcho
+- **API key auth:** `merrick_sk_` keys with SHA-256 hashing, rate limiting, permission scoping
+- **Agent system:** Agent profiles with memory scopes, key-agent binding, token-budget-aware memory loading
+- **Device provisioning:** Auto-creates Honcho peers and mem0 user mappings on first connect
+- **Dreaming engine:** Background memory compaction (dedup, contradiction detection, staleness marking)
+- **External API:** `/v1/*` namespace for device-authenticated memory operations
+- **Internal API:** `/api/*` namespace for dashboard and local CLI
+- **MCP server:** Exposes Merrick as MCP tools/resources for LM Studio, Claude Desktop, etc.
+- **CLI:** Terminal interface for status, devices, keys, memory, sync, doctor
+- **Docker:** Standalone and full-stack compose configurations
+- **Dashboard SPA:** Browser UI for management
+
+### What Was Planned but Not Built
+
+- Settings cascade system (env → config file → database → API)
+- Config file support (`~/.merrick/config.json`)
+- Settings API routes (`/api/settings`)
+- Setup wizard
+- Rate limiting persistence (currently in-memory only)
+- Request logging middleware
+- `mem0_client.py` as a dedicated module (inline `httpx` calls remain in routes)
+- `services/` layer (operations live in route handlers and `provisioning.py`)
+- `schema/migrations.py` (no versioned migration system; `CREATE TABLE IF NOT EXISTS` only)
+- OpenAI-compatible `/v1/chat/completions` endpoint
+- Device self-service endpoints (`/v1/device/info`, `/v1/device/ping`)
+- Device-scoped sync status (`/v1/sync/status`)
+- `routes/v1/` directory (v1 routes are co-located with internal routes)
+
+---
+
+## Appendix A: File Tree
 
 ```
 merrick/
-├── app.py                          # FastAPI entrypoint (modified)
-├── config.py                       # Env + file config loading (modified)
-├── settings.py                     # Settings manager with cascade (new)
-├── database.py                     # Connection pool + schema + migrations (modified)
-├── honcho.py                       # Honcho client (modified)
-├── mem0_client.py                  # mem0 client (new, extracted from routes/memory.py)
-├── sync.py                         # Sync engine (modified)
-├── cli.py                          # Click CLI entrypoint (new)
-├── cli_commands/
-│   ├── __init__.py
-│   ├── serve.py                    # serve/stop/status/install/uninstall
-│   ├── config.py                   # config set/show
-│   ├── keys.py                     # keys create/list/revoke/rotate
-│   ├── devices.py                  # devices list/show/remove
-│   ├── memory.py                   # memory write/search/export
-│   └── sync.py                     # sync trigger/status/history
+├── app.py                          # FastAPI entrypoint, lifespan, router mount
+├── config.py                       # Flat env-var config (os.getenv)
+├── database.py                     # psycopg2 connection pool + schema init
+├── dreaming.py                     # Memory compaction engine
+├── honcho.py                       # Honcho HTTP client
+├── provisioning.py                 # Device auto-provisioning (Honcho peers + mem0 users)
+├── sync.py                         # Bidirectional mem0 ↔ Honcho sync
 ├── middleware/
 │   ├── __init__.py
-│   ├── auth.py                     # API key validation
-│   ├── ratelimit.py                # Per-key rate limiting
-│   └── requestlog.py               # Request logging
-├── services/
-│   ├── __init__.py
-│   ├── devices.py                  # Device registry operations
-│   ├── keys.py                     # API key management
-│   ├── settings.py                 # Settings service (thin wrapper)
-│   ├── setup.py                    # Setup wizard detection + config
-│   └── llm.py                      # LLM provider abstraction
+│   └── auth.py                     # API key auth, rate limiting, request.state injection
 ├── routes/
+│   ├── __init__.py                 # Shared utilities (UUID validation, datetime conversion, SQL builder)
+│   ├── agents.py                   # Agent profiles (internal CRUD + external memory)
+│   ├── analytics.py                # Analytics endpoints
+│   ├── categories.py               # Memory categories
+│   ├── devices.py                  # Device listing
+│   ├── dreaming.py                 # Dreaming trigger + stats
+│   ├── export.py                   # Memory export (JSON, CSV, Markdown, full backup)
+│   ├── keys.py                     # API key CRUD + rotation
+│   ├── memory.py                   # Memory write (internal + /v1/memory/write)
+│   ├── query.py                    # Cross-system query (internal + /v1/query)
+│   ├── status.py                   # Dashboard aggregate status
+│   ├── sync.py                     # Sync trigger/status/log
+│   └── webhooks.py                 # Webhook CRUD + test
+├── mcp_server/
 │   ├── __init__.py
-│   ├── analytics.py                # Analytics (modified)
-│   ├── categories.py               # Categories (unchanged)
-│   ├── devices.py                  # Device CRUD (new)
-│   ├── export.py                   # Export (modified)
-│   ├── keys.py                     # Key management (new)
-│   ├── memory.py                   # Internal memory write (modified)
-│   ├── query.py                    # Internal query (modified)
-│   ├── settings.py                 # Settings CRUD (new)
-│   ├── setup.py                    # Setup wizard (new)
-│   ├── status.py                   # Dashboard status (modified)
-│   ├── sync.py                     # Internal sync (modified)
-│   ├── webhooks.py                 # Webhooks (modified)
-│   └── v1/
-│       ├── __init__.py
-│       ├── memory.py               # External memory (new)
-│       ├── chat.py                 # OpenAI-compatible endpoint (new)
-│       ├── device.py               # Device self-service (new)
-│       └── sync.py                 # External sync status (new)
-├── schema/
-│   ├── merrick.sql                 # Reference DDL (modified)
-│   └── migrations.py               # Migration runner (new)
-├── static/
-│   ├── index.html                  # Dashboard SPA (rewritten)
-│   ├── app.js                      # Dashboard JS (rewritten)
-│   └── style.css                   # Dashboard CSS (rewritten)
-├── pyproject.toml                  # Package metadata + CLI entrypoint (new)
-├── requirements.txt                # Dependencies (modified)
-├── Dockerfile                      # Container build (modified)
-├── docker-compose.yml              # Full stack orchestration (modified)
-├── AGENT.md                        # Agent guide (modified)
-├── ARCHITECTURE.md                 # This document (new)
-├── DOCS.md                         # Developer docs (modified)
-└── README.md                       # Project README (modified)
-```
-
----
-
-## Appendix B: Environment Variables (Complete)
-
-All env vars are prefixed `MERRICK_` and map to config file keys:
-
-| Env Var | Config Key | Default |
-|---|---|---|
-| `MERRICK_DB_HOST` | `database.host` | `localhost` |
-| `MERRICK_DB_PORT` | `database.port` | `5433` |
-| `MERRICK_DB_USER` | `database.user` | `postgres` |
-| `MERRICK_DB_PASSWORD` | `database.password` | `""` |
-| `MERRICK_DB_NAME` | `database.name` | `postgres` |
-| `MERRICK_HONCHO_URL` | `general.honcho_url` | `http://localhost:8000` |
-| `MERRICK_HONCHO_WORKSPACE` | `general.honcho_workspace` | `hermes` |
-| `MERRICK_HONCHO_USER_PEER` | `general.main_user_peer` | `ron` |
-| `MERRICK_MEM0_API_URL` | `general.mem0_url` | `http://localhost:8888` |
-| `MERRICK_MEM0_EMAIL` | `general.mem0_email` | `""` |
-| `MERRICK_MEM0_PASSWORD` | `general.mem0_password` | `""` |
-| `MERRICK_SYNC_INTERVAL` | `sync.interval` | `300` |
-| `MERRICK_SYNC_ENABLED` | `sync.enabled` | `true` |
-| `MERRICK_SERVER_HOST` | `server.host` | `0.0.0.0` |
-| `MERRICK_SERVER_PORT` | `server.port` | `5001` |
-| `MERRICK_LOG_LEVEL` | `server.log_level` | `INFO` |
-| `MERRICK_RATE_LIMIT_RPM` | `rate_limiting.default_rpm` | `60` |
-| `MERRICK_RATE_LIMIT_RPD` | `rate_limiting.default_rpd` | `10000` |
-| `MERRICK_LLM_PROVIDER` | `llm.provider` | `openai` |
-| `MERRICK_LLM_API_KEY` | `llm.api_key` | `""` |
-| `MERRICK_LLM_API_URL` | `llm.api_url` | `""` |
-| `MERRICK_LLM_MODEL` | `llm.default_model` | `gpt-4` |
-
----
-
-## Appendix C: Key Format Specification
-
-```
-Format: mk_ + 40 alphanumeric characters
-Length:  43 characters total
-Prefix:  mk_ (identifies as Merrick key)
-Example: mk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0
-
-Storage: SHA-256 hash in database
-         key_prefix (first 8 chars) stored for display
-         raw key returned ONLY at creation time
-```
-
-### Hash Verification Flow
-
-```
-1. Client sends: Authorization: Bearer mk_a1b2c3d4...
-2. Middleware extracts: raw_key = "mk_a1b2c3d4..."
-3. Compute: key_hash = SHA-256(raw_key)
-4. Query: SELECT * FROM api_keys WHERE key_hash = %s AND is_active = true
-5. If no match → 401 Unauthorized
-6. If match → check expires_at, check rate limits
-7. If all OK → set request.state.device_id, request.state.scope
-8. Update: UPDATE api_keys SET last_used_at = NOW() WHERE id = %s (async)
+│   ├── __main__.py                 # Entry point for python -m mcp_server
+│   ├── client.py                   # Async HTTP client for Merrick API
+│   ├── config.py                   # MCP server env-var config
+│   └── server.py                   # MCPServer tools + resources
+├── merrick_cli/
+│   ├── __init__.py                 # __version__ = "0.1.0"
+│   ├── client.py                   # Sync HTTP client for Merrick API
+│   ├── config.py                   # CLI env-var config
+│   └── main.py                     # Click commands: status, devices, keys, memory, sync, doctor
+├── static/                         # Dashboard SPA files
+├── docker-compose.yml              # Standalone: PostgreSQL + Merrick
+├── docker-compose.full.yml         # Full stack: PostgreSQL + Redis + Honcho + mem0 + Merrick
+├── Dockerfile
+├── requirements.txt
+├── ARCHITECTURE.md
+├── AGENT.md
+└── README.md
 ```
 
 ---
 
 *Document generated by Monica Hall, VP of Business Development at Pied Piper.*
-*Version: 0.2.0 | Date: 2026-07-13*
+*Version: 2.0.0 | Date: 2026-08-26*

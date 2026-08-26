@@ -139,6 +139,28 @@ def _write_memory_impl(
     }
 
 
+@router.get("/{memory_id}")
+def get_memory_by_id(memory_id: str):
+    """Get a single memory by ID. Direct DB lookup — no auth required."""
+    try:
+        row = db.query_one(
+            "SELECT id, payload->>'data' as data, payload FROM memories WHERE id = %s::uuid",
+            (memory_id,),
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Memory not found")
+        return {
+            "id": str(row["id"]),
+            "data": row["data"],
+            "payload": row["payload"],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("get_memory_by_id failed for %s: %s", memory_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/write")
 def write_memory(req: MemoryWriteRequest):
     """Write to BOTH mem0 (via mem0 API) and Honcho (via Honcho API)."""

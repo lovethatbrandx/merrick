@@ -81,27 +81,36 @@ class MerrickClient:
         }
 
     async def _assign_categories(self, memory_id: str, categories: list[str]) -> None:
-        """Assign a memory to categories, creating categories if needed."""
+        """Assign a memory to categories, creating categories if needed.
+
+        Fetches the category list once, then reuses it for all categories.
+        """
         client = self._client()
+
+        # Fetch all categories once
+        try:
+            existing = await client.get("/api/categories")
+            existing.raise_for_status()
+            cats = existing.json().get("categories", [])
+        except Exception as exc:
+            logger.warning("Failed to fetch categories: %s", exc)
+            return
+
+        cat_map = {c.get("name"): c.get("id") for c in cats}
+
         for cat_name in categories:
             try:
-                # Get or create category
-                existing = await client.get("/api/categories")
-                existing.raise_for_status()
-                cats = existing.json().get("categories", [])
-                cat_id = None
-                for c in cats:
-                    if c.get("name") == cat_name:
-                        cat_id = c.get("id")
-                        break
+                cat_id = cat_map.get(cat_name)
 
                 if not cat_id:
                     create_resp = await client.post(
                         "/api/categories",
                         json={"name": cat_name},
                     )
-                    if create_resp.status_code == 200:
+                    if create_resp.status_code in (200, 201):
                         cat_id = create_resp.json().get("id")
+                        if cat_id:
+                            cat_map[cat_name] = cat_id
 
                 if cat_id:
                     await client.post(
@@ -160,20 +169,17 @@ class MerrickClient:
         return memories[:limit]
 
     async def get_memory(self, memory_id: str) -> dict[str, Any] | None:
-        """Get a specific memory by ID.
-
-        Merrick has no GET /api/memory/{id} endpoint, so we fetch all
-        memories via the export endpoint and filter. For large stores
-        this is suboptimal — a dedicated endpoint would be better.
-        """
-        resp = await self._client().get("/api/export/json")
-        resp.raise_for_status()
-        data = resp.json()
-
-        for mem in data.get("memories", []):
-            if mem.get("id") == memory_id:
-                return mem
-        return None
+        """Get a specific memory by ID via direct DB lookup."""
+        try:
+            resp = await self._client().get(f"/api/memory/{memory_id}")
+            if resp.status_code == 404:
+                return None
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                return None
+            raise
 
     async def delete_memory(self, memory_id: str) -> dict[str, Any]:
         """Delete a memory by ID.

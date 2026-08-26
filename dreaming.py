@@ -117,8 +117,15 @@ def _mark_compacted(payload: dict, reason: str, **extra) -> dict:
 def _find_duplicates(threshold: Optional[float] = None) -> list[dict]:
     """Find pairs of memories with very similar content.
 
+    Optimization: after exact-match pass, only fuzzy-compare memories that
+    share at least 3 tokens (via _tokenize). This avoids comparing completely
+    unrelated memories and reduces the comparison set from O(n²) to roughly
+    O(n * k) where k << n.
+
     Returns list of {keep_id, duplicate_id, similarity, content_a, content_b}.
     """
+    MIN_COMMON_TOKENS = 3  # Skip fuzzy compare if fewer tokens in common
+
     rows = db.query_all(
         """SELECT id, payload->>'data' as data, payload
            FROM memories
@@ -131,6 +138,8 @@ def _find_duplicates(threshold: Optional[float] = None) -> list[dict]:
 
     # Index by normalized content for fast exact-match first pass
     seen: dict[str, dict] = {}
+    # Token-index: map token -> list of seen memory keys, for fast candidate selection
+    token_index: dict[str, list[str]] = {}
     duplicates = []
 
     for row in rows:
@@ -153,11 +162,21 @@ def _find_duplicates(threshold: Optional[float] = None) -> list[dict]:
             })
             continue
 
-        # Fuzzy match against all seen memories — O(n²) but memories table is small
-        for existing in seen.values():
+        # Find candidates: only memories sharing >= MIN_COMMON_TOKENS
+        current_tokens = _tokenize(content)
+        candidate_norms: set[str] = set()
+        for token in current_tokens:
+            for norm_key in token_index.get(token, []):
+                candidate_norms.add(norm_key)
+
+        matched = False
+        for cand_norm in candidate_norms:
+            existing = seen[cand_norm]
+            # Quick token-overlap pre-check before the heavier _is_similar
+            cand_tokens = _tokenize(existing["content"])
+            if len(current_tokens & cand_tokens) < MIN_COMMON_TOKENS:
+                continue
             if _is_similar(content, existing["content"], threshold):
-                # Keep the more recent one (lower UUID = older in practice,
-                # but we ordered DESC so `existing` came first = newer)
                 duplicates.append({
                     "keep_id": existing["id"],
                     "duplicate_id": mem_id,
@@ -165,9 +184,13 @@ def _find_duplicates(threshold: Optional[float] = None) -> list[dict]:
                     "content_a": existing["content"],
                     "content_b": content,
                 })
-                break  # Only match against the first similar one
-        else:
+                matched = True
+                break
+
+        if not matched:
             seen[norm] = {"id": mem_id, "content": content}
+            for token in current_tokens:
+                token_index.setdefault(token, []).append(norm)
 
     return duplicates
 
@@ -178,6 +201,9 @@ def _find_contradictions() -> list[dict]:
     Strategy: memories whose first ~10 words are similar but whose full
     content diverges significantly. This catches cases like:
       "Project deadline is July 25" vs "Project deadline is August 1"
+
+    Optimization: index topic tokens so we only compare memories that share
+    topic words, avoiding the O(n²) full pairwise scan.
 
     Returns list of {keep_id, superseded_id, topic_overlap, content_a, content_b}.
     """
@@ -192,7 +218,10 @@ def _find_contradictions() -> list[dict]:
         return []
 
     contradictions = []
-    seen = []
+    # seen: norm_topic -> {id, content, topic, norm_topic}
+    seen: dict[str, dict] = {}
+    # topic_token_index: token -> list of norm_topics that contain it
+    topic_token_index: dict[str, list[str]] = {}
 
     for row in rows:
         mem_id = str(row["id"])
@@ -204,14 +233,23 @@ def _find_contradictions() -> list[dict]:
         # Take first 10 words as "topic" signature
         topic = " ".join(words[:10])
         norm_topic = _normalize(topic)
+        if not norm_topic:
+            continue
 
-        for existing in seen:
-            existing_words = existing["content"].split()
-            existing_topic = " ".join(existing_words[:10])
-            existing_norm = _normalize(existing_topic)
+        topic_tokens = _tokenize(topic)
+
+        # Find candidates: only memories with at least 1 shared topic token
+        candidate_norm_topics: set[str] = set()
+        for token in topic_tokens:
+            for nt in topic_token_index.get(token, []):
+                candidate_norm_topics.add(nt)
+
+        matched = False
+        for existing_norm in candidate_norm_topics:
+            existing = seen[existing_norm]
 
             # Topics must be similar (same subject) but full content different
-            topic_sim = _jaccard_similarity(topic, existing_topic)
+            topic_sim = _jaccard_similarity(topic, existing["topic"])
             content_sim = _jaccard_similarity(content, existing["content"])
 
             # Contradiction heuristic: similar topic opener, different full content
@@ -223,9 +261,13 @@ def _find_contradictions() -> list[dict]:
                     "content_a": existing["content"],
                     "content_b": content,
                 })
+                matched = True
                 break
 
-        seen.append({"id": mem_id, "content": content})
+        if not matched:
+            seen[norm_topic] = {"id": mem_id, "content": content, "topic": topic, "norm_topic": norm_topic}
+            for token in topic_tokens:
+                topic_token_index.setdefault(token, []).append(norm_topic)
 
     return contradictions
 

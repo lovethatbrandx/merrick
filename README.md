@@ -33,7 +33,7 @@ This project is actively maintained. Here's what's landed recently.
 Merrick is no longer just a sync bridge. It's a full memory daemon with device provisioning, API key authentication, an MCP server, a CLI, and a dreaming loop that keeps memories clean.
 
 - **Agent Profiles** — define specialized memory contexts per agent with custom system prompts and token budgets. Routes: `routes/agents.py`
-- **API Key Authentication** — SHA-256 hashed keys with per-device scoping, rate limiting, and expiration. Keys look like `mk_...` and are shown once at creation time.
+- **API Key Authentication** — SHA-256 hashed keys with per-device scoping, rate limiting, and expiration. Keys look like `merrick_sk_...` and are shown once at creation time.
 - **MCP Server** — full [Model Context Protocol](https://modelcontextprotocol.io/) integration. Tools: `write_memory`, `search_memories`, `list_memories`, `get_memory`, `delete_memory`, `get_status`. Resources: `merrick://status`, `merrick://memories`. Works with LM Studio, Claude Desktop, VS Code, and any MCP-compatible client.
 - **CLI (`merrick_cli`)** — manage everything from the terminal: `merrick status`, `merrick devices`, `merrick keys create`, `merrick memory write/search/export`, `merrick sync`, `merrick doctor`. Rich output with tables and panels.
 - **Dreaming Loop** — background compaction cycle that deduplicates memories, detects contradictions (same topic, different values), and marks stale memories as compacted. No data deleted — just flagged for recovery.
@@ -52,12 +52,12 @@ Merrick is no longer just a sync bridge. It's a full memory daemon with device p
 
 - **Bidirectional Sync** — mem0 ↔ Honcho every 5 minutes (configurable). Fault-tolerant: if one direction fails, the other still runs.
 - **Agent Profiles** — define per-agent memory contexts with custom system prompts and token budgets. Agents get their own scoped memories.
-- **API Key Auth** — SHA-256 hashed keys (`mk_...` prefix), per-device scoping, rate limiting (RPM + RPD), optional expiration. Raw key shown once at creation.
+- **API Key Auth** — SHA-256 hashed keys (`merrick_sk_...` prefix), per-device scoping, rate limiting (RPM + RPD), optional expiration. Raw key shown once at creation.
 - **MCP Server** — stdio transport. Exposes `write_memory`, `search_memories`, `list_memories`, `get_memory`, `delete_memory`, `get_status` as tools. `merrick://status` and `merrick://memories` as resources.
 - **CLI** — `merrick status|devices|keys|memory|sync|doctor`. Rich output, error handling, connection diagnostics.
 - **Dreaming Loop** — deduplication via Jaccard similarity + word overlap. Contradiction detection (same topic opener, different content). Stale memory compaction. Covers both `memories` and `agent_memories` tables.
 - **Device Provisioning** — auto-creates Honcho peers (`device_{id}`) and mem0 users on first connect. Thread-safe in-memory cache with DB persistence.
-- **External API** — `/v1/memory/write`, `/v1/memory/search`, `/v1/memory/read`, `/v1/chat/completions`, `/v1/device/info`, `/v1/device/ping`, `/v1/sync/status`. All require Bearer token auth.
+- **External API** — `/v1/memory/write`, `/v1/query`, `/v1/agents`, `/v1/agents/{slug}/memory`, `/v1/agents/{slug}/memory/search`. All require Bearer token auth.
 - **Cross-System Search** — `POST /api/query` searches both mem0 (full-text) and Honcho (peer search) simultaneously, deduplicates by content.
 - **Dashboard** — dark-themed SPA with tabs for Overview, Query, Sync Log, Devices, Settings. Auto-refreshes every 30 seconds.
 - **Categories** — organize memories into named categories with color coding. Assign/unassign memories via API.
@@ -108,6 +108,7 @@ cd merrick
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+pip install -e .                           # Installs the `merrick` CLI command
 ```
 
 Set the required environment variables:
@@ -356,12 +357,11 @@ All `/v1/*` routes require a valid API key via `Authorization: Bearer <key>`.
 | Method | Path | Description | Scopes Required |
 |--------|------|-------------|-----------------|
 | `POST` | `/v1/memory/write` | Write a memory (scoped to device) | `memory.write` |
-| `POST` | `/v1/memory/search` | Search memories | `memory.read` |
-| `POST` | `/v1/memory/read` | Read a specific memory by ID | `memory.read` |
-| `POST` | `/v1/chat/completions` | Memory-augmented chat completion (OpenAI-compatible) | `query.read` |
-| `GET` | `/v1/device/info` | Get own device info | `device.read` |
-| `POST` | `/v1/device/ping` | Update last_seen_at, report metadata | `device.read` |
-| `GET` | `/v1/sync/status` | Sync status for this device | `sync.read` |
+| `POST` | `/v1/query` | Cross-system search (mem0 + Honcho, deduplicated) | `memory.read` |
+| `GET` | `/v1/agents` | List available agent profiles | `read` |
+| `GET` | `/v1/agents/{slug}` | Get agent profile (system prompt + traits) | `read` |
+| `POST` | `/v1/agents/{slug}/memory` | Write agent-specific memory | `write` |
+| `POST` | `/v1/agents/{slug}/memory/search` | Search agent's memories | `read` |
 
 ## MCP Server
 
@@ -440,7 +440,7 @@ merrick --url http://your-server:5001 status
 
 ## Security
 
-- **API Key Auth** — Bearer token via `Authorization` header. Keys are SHA-256 hashed before storage. Raw key shown once at creation time. Format: `mk_` + 40 alphanumeric characters.
+- **API Key Auth** — Bearer token via `Authorization` header. Keys are SHA-256 hashed before storage. Raw key shown once at creation time. Format: `merrick_sk_` + 40 alphanumeric characters.
 - **Rate Limiting** — in-memory token bucket per API key. Configurable RPM (default: 60) and RPD (default: 10,000). Returns 429 with Retry-After header.
 - **Device Scoping** — each key is bound to a device. Writes are tracked per-device. Device-scoped search returns only that device's memories (opt-in via `device_filter: true`).
 - **Key Rotation** — revoke old key and create new atomically. `POST /api/keys/{key_id}/rotate`.
