@@ -40,7 +40,7 @@ Merrick is no longer just a sync bridge. It's a full memory daemon with device p
 - **CLI (`merrick_cli`)** — manage everything from the terminal: `merrick status`, `merrick devices`, `merrick keys create`, `merrick memory write/search/export`, `merrick sync`, `merrick doctor`. Rich output with tables and panels.
 - **Dreaming Loop** — background compaction cycle that deduplicates memories, detects contradictions (same topic, different values), and marks stale memories as compacted. No data deleted — just flagged for recovery.
 - **Device Provisioning** — auto-creates Honcho peers and mem0 users on first device connect. Thread-safe caching, graceful fallback to the global user peer for unknown devices.
-- **Standalone Docker** — `docker-compose.yml` runs PostgreSQL + Merrick only. For users who already run Honcho/mem0 elsewhere. `docker-compose.full.yml` brings up everything (PostgreSQL, Redis, Honcho, mem0, Merrick) in one shot.
+- **Standalone Docker** — `docker-compose.yml` runs PostgreSQL + Merrick only. For users who already run Honcho/mem0 elsewhere. `docker-compose-full.yml` brings up everything (PostgreSQL, Redis, Honcho, mem0, Merrick) in one shot.
 - **External API (`/v1/*`)** — device-scoped memory read/write/search via Bearer token auth. OpenAI-compatible `/v1/chat/completions` endpoint with memory-augmented generation.
 - **Middleware Stack** — API key validation, per-key rate limiting (token bucket), request logging. All in `middleware/auth.py`.
 
@@ -92,7 +92,7 @@ You need these running before Merrick can start:
 3. **mem0** — connected to the same PostgreSQL instance
    - The `memories` table populated with at least a few entries
 
-If you're starting fresh, use `docker-compose.full.yml` which brings up everything.
+If you're starting fresh, use `docker-compose-full.yml` which brings up everything.
 
 ## Quick Start
 
@@ -160,7 +160,7 @@ docker compose up -d --build
 Runs everything: PostgreSQL, Redis, Honcho, mem0, and Merrick.
 
 ```bash
-docker compose -f docker-compose.full.yml up -d --build
+docker compose -f docker-compose-full.yml up -d --build
 ```
 
 #### Which Compose File?
@@ -168,9 +168,9 @@ docker compose -f docker-compose.full.yml up -d --build
 | Scenario | File | Recommendation |
 |----------|------|----------------|
 | You already run Honcho + mem0 | `docker-compose.yml` | **Standalone** — connects to your existing services |
-| Starting from scratch | `docker-compose.full.yml` | **Full stack** — everything in one shot |
+| Starting from scratch | `docker-compose-full.yml` | **Full stack** — everything in one shot |
 | CI/CD or automated deployments | `docker-compose.yml` | **Standalone** — fewer dependencies, faster startup |
-| Quick test of the full system | `docker-compose.full.yml` | **Full stack** — zero external setup needed |
+| Quick test of the full system | `docker-compose-full.yml` | **Full stack** — zero external setup needed |
 
 #### Docker Commands
 
@@ -207,7 +207,7 @@ docker compose up -d
 | Running Merrick + Honcho on one machine | **Run from source** — less overhead, both share the same host |
 | Production / daily driver | **Docker** — set it and forget it, auto-restarts if it crashes |
 | Quick test without installing Python deps | **Docker** — no venv, no pip, just `docker compose up -d` |
-| Full stack from scratch | **Docker full** — `docker-compose.full.yml` brings up everything |
+| Full stack from scratch | **Docker full** — `docker-compose-full.yml` brings up everything |
 | CI/CD or automated deployments | **Docker** — reproducible, no manual setup steps |
 
 ## Architecture
@@ -497,7 +497,7 @@ merrick/
 │   ├── style.css               # Dark theme CSS
 │   └── app.js                  # Frontend logic (tabs, API calls, rendering)
 ├── docker-compose.yml          # Standalone: PostgreSQL + Merrick
-├── docker-compose.full.yml     # Full stack: PostgreSQL + Redis + Honcho + mem0 + Merrick
+├── docker-compose-full.yml     # Full stack: PostgreSQL + Redis + Honcho + mem0 + Merrick
 ├── Dockerfile                  # Container build (python:3.12-slim)
 ├── requirements.txt            # Python dependencies
 ├── pyproject.toml              # Package metadata + CLI entrypoint

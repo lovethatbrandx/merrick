@@ -984,13 +984,13 @@ Services:
 
 External services (Honcho, mem0) are expected to be reachable via `host.docker.internal`.
 
-### 11.2 Full Stack: `docker-compose.full.yml`
+### 11.2 Full Stack: `docker-compose-full.yml`
 
 Runs **everything**: PostgreSQL, Redis, Honcho API, Honcho Deriver, mem0, and Merrick.
 
 ```bash
-docker compose -f docker-compose.full.yml up -d --build
-docker compose -f docker-compose.full.yml logs -f merrick
+docker compose -f docker-compose-full.yml up -d --build
+docker compose -f docker-compose-full.yml logs -f merrick
 ```
 
 Services:
@@ -1096,7 +1096,7 @@ merrick/
 │   └── main.py                     # Click commands: status, devices, keys, memory, sync, doctor
 ├── static/                         # Dashboard SPA files
 ├── docker-compose.yml              # Standalone: PostgreSQL + Merrick
-├── docker-compose.full.yml         # Full stack: PostgreSQL + Redis + Honcho + mem0 + Merrick
+├── docker-compose-full.yml         # Full stack: PostgreSQL + Redis + Honcho + mem0 + Merrick
 ├── Dockerfile
 ├── requirements.txt
 ├── ARCHITECTURE.md

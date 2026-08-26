@@ -12,7 +12,7 @@
 # │    docker compose logs -f merrick                               │
 # │                                                                 │
 # │  Full stack (all services)? Use:                                │
-# │    docker compose -f docker-compose.full.yml up -d --build      │
+# │    docker compose -f docker-compose-full.yml up -d --build      │
 # └─────────────────────────────────────────────────────────────────┘
 
 services:
