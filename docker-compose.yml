@@ -1,20 +1,87 @@
+# ┌─────────────────────────────────────────────────────────────────┐
+# │  MERRICK — STANDALONE COMPOSE (default)                        │
+# │  Runs: PostgreSQL (pgvector) + Merrick only                    │
+# │                                                                 │
+# │  For users who already run Honcho and/or mem0 elsewhere.       │
+# │  Merrick talks to external services via host.docker.internal.   │
+# │                                                                 │
+# │  Usage:                                                         │
+# │    cp .env.example .env    # edit with your values              │
+# │    docker compose up -d --build                                 │
+# │    docker compose ps                                             │
+# │    docker compose logs -f merrick                               │
+# │                                                                 │
+# │  Full stack (all services)? Use:                                │
+# │    docker compose -f docker-compose.full.yml up -d --build      │
+# └─────────────────────────────────────────────────────────────────┘
+
 services:
+  # ── PostgreSQL with pgvector ─────────────────────────────────────
+  # Merrick's own database for api_keys, agent_profiles, sync state, etc.
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: merrick-postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: ${MERRICK_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${MERRICK_DB_PASSWORD:?Set MERRICK_DB_PASSWORD in .env}
+      POSTGRES_DB: ${MERRICK_DB_NAME:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -d ${MERRICK_DB_NAME:-postgres} -U ${MERRICK_DB_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - merrick-net
+
+  # ── Merrick (Memory Bridge) ─────────────────────────────────────
+  # Bridges Honcho and mem0 — connect to external services via
+  # host.docker.internal (or set your own URLs in .env).
   merrick:
     build: .
     container_name: merrick
     ports:
       - "5001:5001"
+    depends_on:
+      postgres:
+        condition: service_healthy
     env_file:
       - .env
     environment:
-      - MERRICK_DB_HOST=host.docker.internal
-      - MERRICK_HONCHO_URL=http://host.docker.internal:8000
-      - MERRICK_MEM0_API_URL=http://host.docker.internal:8888
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      # ── Database (local container) ──
+      - MERRICK_DB_HOST=postgres
+      - MERRICK_DB_PORT=5432
+      - MERRICK_DB_USER=${MERRICK_DB_USER:-postgres}
+      - MERRICK_DB_PASSWORD=${MERRICK_DB_PASSWORD:?Set MERRICK_DB_PASSWORD in .env}
+      - MERRICK_DB_NAME=${MERRICK_DB_NAME:-postgres}
+      # ── Honcho (external — adjust host/port if needed) ──
+      - MERRICK_HONCHO_URL=${MERRICK_HONCHO_URL:-http://host.docker.internal:8000}
+      - MERRICK_HONCHO_WORKSPACE=${MERRICK_HONCHO_WORKSPACE:-hermes}
+      - MERRICK_HONCHO_USER_PEER=${MERRICK_HONCHO_USER_PEER:-ron}
+      # ── mem0 (external — adjust host/port if needed) ──
+      - MERRICK_MEM0_API_URL=${MERRICK_MEM0_API_URL:-http://host.docker.internal:8888}
+      - MERRICK_MEM0_EMAIL=${MERRICK_MEM0_EMAIL:-}
+      - MERRICK_MEM0_PASSWORD=${MERRICK_MEM0_PASSWORD:-}
+      # ── Sync settings ──
+      - MERRICK_SYNC_INTERVAL=${MERRICK_SYNC_INTERVAL:-300}
+      - MERRICK_SYNC_ENABLED=${MERRICK_SYNC_ENABLED:-true}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/api/health')"]
       interval: 10s
       timeout: 5s
       retries: 3
     restart: unless-stopped
+    networks:
+      - merrick-net
+
+volumes:
+  postgres_data:
+
+networks:
+  merrick-net:
+    name: merrick-net

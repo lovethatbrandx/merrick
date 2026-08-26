@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 import database as db
 import honcho
+import dreaming
 from config import logger
 
 router = APIRouter(prefix="/api", tags=["status"])
@@ -81,5 +82,12 @@ def system_status():
     except Exception as e:
         logger.error("sync state counts failed: %s", e)
         status["sync_state_counts"] = []
+
+    # --- Dreaming stats ---
+    try:
+        status["dreaming"] = dreaming.get_dreaming_stats()
+    except Exception as e:
+        logger.error("dreaming stats failed: %s", e)
+        status["dreaming"] = {"error": str(e)}
 
     return status

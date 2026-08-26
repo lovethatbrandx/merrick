@@ -180,6 +180,69 @@ def analytics_categories():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/devices")
+def analytics_devices():
+    """Per-device breakdown of memory writes."""
+    try:
+        # Check if device_id column exists on analytics table (added in Phase 2)
+        col_check = db.query_one("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'analytics' AND column_name = 'device_id'
+            ) as has_col
+        """)
+        has_device_col = col_check["has_col"] if col_check else False
+
+        if has_device_col:
+            rows = db.query_all("""
+                SELECT
+                    a.device_id::text,
+                    COALESCE(dp.name, a.device_id::text) as device_name,
+                    dp.device_type,
+                    COUNT(*) as memory_count,
+                    MAX(a.created_at) as last_write,
+                    COUNT(*) FILTER (WHERE a.created_at >= CURRENT_DATE) as writes_today,
+                    COUNT(*) FILTER (WHERE a.created_at >= CURRENT_DATE - INTERVAL '7 days') as writes_this_week
+                FROM analytics a
+                LEFT JOIN device_peers dp ON a.device_id = dp.id
+                WHERE a.event_type = 'memory.created' AND a.device_id IS NOT NULL
+                GROUP BY a.device_id, dp.name, dp.device_type
+                ORDER BY memory_count DESC
+            """)
+        else:
+            # Fallback: derive device info from source field in metadata
+            rows = db.query_all("""
+                SELECT
+                    COALESCE(metadata->>'device_id', metadata->>'source_device', source, 'unknown') as device_id,
+                    COALESCE(metadata->>'device_id', metadata->>'source_device', source, 'unknown') as device_name,
+                    NULL as device_type,
+                    COUNT(*) as memory_count,
+                    MAX(created_at) as last_write,
+                    COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE) as writes_today,
+                    COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE - INTERVAL '7 days') as writes_this_week
+                FROM analytics
+                WHERE event_type = 'memory.created'
+                GROUP BY COALESCE(metadata->>'device_id', metadata->>'source_device', source, 'unknown')
+                ORDER BY memory_count DESC
+            """)
+
+        devices = []
+        for r in (rows or []):
+            devices.append({
+                "device_id": r["device_id"],
+                "device_name": r["device_name"],
+                "device_type": r.get("device_type"),
+                "memory_count": r["memory_count"],
+                "last_write": str(r["last_write"]) if r.get("last_write") else None,
+                "writes_today": r["writes_today"],
+                "writes_this_week": r["writes_this_week"],
+            })
+        return {"devices": devices}
+    except Exception as e:
+        logger.error("analytics devices failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/track")
 def track_custom_event(req: TrackEvent):
     """Track a custom analytics event."""

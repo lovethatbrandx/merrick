@@ -1,12 +1,11 @@
-import uuid
-
 import httpx
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from typing import Optional
 
 import database as db
 import honcho
+import provisioning
 from config import HONCHO_USER_PEER, MEM0_API_URL, MEM0_EMAIL, MEM0_PASSWORD, logger
 from routes.webhooks import fire_webhooks
 from routes.analytics import track_event
@@ -46,10 +45,20 @@ class MemoryReasoningRequest(BaseModel):
     peer: Optional[str] = None
 
 
-@router.post("/write")
-def write_memory(req: MemoryWriteRequest):
-    """Write to BOTH mem0 (via mem0 API) and Honcho (via Honcho API)."""
-    user_id = req.user_id or HONCHO_USER_PEER
+def _write_memory_impl(
+    content: str,
+    source: str,
+    user_id: str,
+    metadata: dict,
+    webhook_extra: Optional[dict] = None,
+    analytics_extra: Optional[dict] = None,
+    honcho_peer_id: Optional[str] = None,
+) -> dict:
+    """Core write logic shared between /api and /v1 endpoints.
+
+    Writes to both mem0 (via API) and Honcho (via API), fires webhooks,
+    and tracks analytics. Callers pre-build metadata and optional extras.
+    """
     results = {"mem0": {"success": False, "error": None}, "honcho": {"success": False, "error": None}}
 
     # --- Write to mem0 (via authenticated API so dashboard logs it) ---
@@ -61,11 +70,11 @@ def write_memory(req: MemoryWriteRequest):
         resp = httpx.post(
             f"{MEM0_API_URL}/memories",
             json={
-                "messages": [{"role": "user", "content": req.content}],
+                "messages": [{"role": "user", "content": content}],
                 "user_id": user_id,
-                "agent_id": f"merrick_{req.source}",
+                "agent_id": f"merrick_{source}",
                 "infer": False,
-                "metadata": {"source": req.source, "merrick": True},
+                "metadata": metadata,
             },
             headers=headers,
             timeout=30.0,
@@ -82,17 +91,18 @@ def write_memory(req: MemoryWriteRequest):
         logger.error("mem0 write failed (via API): %s", e)
 
     # --- Write to Honcho (create session if needed, then post message) ---
-    session_id = f"merrick_{req.source}_{user_id}"
+    session_id = f"merrick_{source}_{user_id}"
+    peer_to_use = honcho_peer_id or user_id
     try:
         try:
-            honcho.create_session(session_id, f"Merrick {req.source} Import")
+            honcho.create_session(session_id, f"Merrick {source} Import")
         except Exception:
             pass  # Session may already exist — that's fine
 
         result = honcho.post_message(
             session_id=session_id,
-            peer=user_id,
-            content=req.content,
+            peer=peer_to_use,
+            content=content,
         )
         results["honcho"] = {"success": True, "id": result.get("id", "")}
         logger.info("honcho write OK: %s", result.get("id", ""))
@@ -105,23 +115,41 @@ def write_memory(req: MemoryWriteRequest):
 
     # Fire webhooks if mem0 write succeeded
     if results["mem0"]["success"]:
+        webhook_payload = {
+            "id": mem0_id,
+            "content": content,
+            "source": source,
+            "user_id": user_id,
+        }
+        if webhook_extra:
+            webhook_payload.update(webhook_extra)
         try:
-            fire_webhooks("memory.created", {
-                "id": mem0_id,
-                "content": req.content,
-                "source": req.source,
-                "user_id": user_id,
-            })
+            fire_webhooks("memory.created", webhook_payload)
         except Exception as e:
             logger.warning("Webhook fire failed: %s", e)
 
-        # Track analytics
-        track_event("memory.created", req.source, {"mem0_id": mem0_id, "content": req.content})
+        analytics_data = {"mem0_id": mem0_id, "content": content}
+        if analytics_extra:
+            analytics_data.update(analytics_extra)
+        track_event("memory.created", source, analytics_data)
 
     return {
         "status": "ok" if both_ok else "partial",
         "results": results,
     }
+
+
+@router.post("/write")
+def write_memory(req: MemoryWriteRequest):
+    """Write to BOTH mem0 (via mem0 API) and Honcho (via Honcho API)."""
+    user_id = req.user_id or HONCHO_USER_PEER
+    metadata = {"source": req.source, "merrick": True}
+    return _write_memory_impl(
+        content=req.content,
+        source=req.source,
+        user_id=user_id,
+        metadata=metadata,
+    )
 
 
 @router.post("/reasoning")
@@ -147,3 +175,41 @@ def reasoning_query(req: MemoryReasoningRequest):
             "results": [],
             "count": 0,
         }
+
+
+# ===================================================================
+# EXTERNAL: Authenticated write via /v1/memory/write
+# ===================================================================
+
+v1_memory_router = APIRouter(prefix="/v1/memory", tags=["memory-external"])
+
+
+@v1_memory_router.post("/write")
+def v1_write_memory(req: MemoryWriteRequest, request: Request):
+    """
+    Authenticated memory write.
+    Same as /api/memory/write but tags with device_id from the API key scope.
+    """
+    device_id = getattr(request.state, "device_id", "unknown")
+
+    # Provision device-specific storage identities
+    identities = provisioning.get_or_provision(device_id)
+    # Always use provisioned identity for v1 (device isolation)
+    user_id = identities["mem0_user_id"]
+
+    # Merge device_id into metadata
+    metadata = req.metadata or {}
+    metadata["source_device"] = device_id
+    metadata["merrick"] = True
+
+    result = _write_memory_impl(
+        content=req.content,
+        source=req.source,
+        user_id=user_id,
+        metadata=metadata,
+        webhook_extra={"source_device": device_id},
+        analytics_extra={"device_id": device_id},
+        honcho_peer_id=identities["honcho_peer_id"],
+    )
+    result["source_device"] = device_id
+    return result

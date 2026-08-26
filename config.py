@@ -19,3 +19,9 @@ MEM0_PASSWORD = os.getenv("MERRICK_MEM0_PASSWORD", "")
 
 SYNC_INTERVAL = int(os.getenv("MERRICK_SYNC_INTERVAL", "300"))
 SYNC_ENABLED = os.getenv("MERRICK_SYNC_ENABLED", "true").lower() == "true"
+
+# ── Dreaming (memory compaction) ──────────────────────────────────────────
+DREAMING_ENABLED = os.getenv("MERRICK_DREAMING_ENABLED", "true").lower() == "true"
+DREAMING_INTERVAL = int(os.getenv("MERRICK_DREAMING_INTERVAL", "3600"))  # seconds (default: 1 hour)
+DREAMING_STALE_DAYS = int(os.getenv("MERRICK_DREAMING_STALE_DAYS", "90"))
+DREAMING_SIMILARITY_THRESHOLD = float(os.getenv("MERRICK_DREAMING_SIMILARITY_THRESHOLD", "0.7"))

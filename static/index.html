@@ -3,265 +3,645 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Merrick — Memory Bridge</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <title>Merrick — Dashboard</title>
+  <link rel="stylesheet" href="./style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐘</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <div class="layout">
-    <!-- Header -->
-    <header class="header">
-      <div class="header-brand">
-        <span class="header-logo">🐘</span>
-        <div>
-          <h1 class="header-title">Merrick</h1>
-          <p class="header-subtitle">Elephants Never Forget</p>
-        </div>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">🐘</span>
+        <span class="brand-text">Merrick</span>
       </div>
-      <nav class="header-nav">
-        <button class="nav-tab active" data-tab="dashboard">Dashboard</button>
-        <button class="nav-tab" data-tab="query">Query</button>
-        <button class="nav-tab" data-tab="synclog">Sync Log</button>
-        <button class="nav-tab" data-tab="categories">Categories</button>
-        <button class="nav-tab" data-tab="analytics">Analytics</button>
-        <button class="nav-tab" data-tab="export">Export</button>
-        <span class="nav-divider"></span>
-        <a href="/ext/hombre" target="_blank" class="nav-link ext-link" data-port="5000" title="Open Hombre">🧠 Hombre</a>
-        <a href="/ext/mem0" target="_blank" class="nav-link ext-link" data-port="3030" title="Open mem0 Dashboard">🐘 mem0</a>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-page="overview">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <span>Overview</span>
+        </button>
+        <button class="nav-item" data-page="devices">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <span>Devices & Keys</span>
+        </button>
+        <button class="nav-item" data-page="agents">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span>Agents</span>
+        </button>
+        <button class="nav-item" data-page="sync">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          <span>Sync Monitor</span>
+        </button>
+        <button class="nav-item" data-page="analytics">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          <span>Analytics</span>
+        </button>
+        <button class="nav-item" data-page="settings">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Settings</span>
+        </button>
       </nav>
-    </header>
+      <div class="sidebar-footer">
+        <div class="status-dot" id="global-status-dot"></div>
+        <span class="status-text" id="global-status-text">Connecting...</span>
+      </div>
+    </aside>
 
-    <!-- Main Content -->
-    <main class="main">
-      <!-- Dashboard Tab -->
-      <section id="tab-dashboard" class="tab-content active">
-        <!-- Stats Grid -->
-        <div class="stats-grid" id="stats-grid">
-          <div class="stat-card">
-            <div class="stat-label">mem0 Memories</div>
-            <div class="stat-value" id="stat-mem0-count">—</div>
+    <!-- Main -->
+    <div class="main">
+      <!-- Top bar -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" id="mobile-menu-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <h2 class="page-title" id="page-title">Overview</h2>
+        </div>
+        <div class="topbar-right">
+          <div class="status-badge" id="status-badge">
+            <div class="status-dot status-dot--sm status-dot--green"></div>
+            <span>All systems operational</span>
           </div>
-          <div class="stat-card">
-            <div class="stat-label">Honcho Sessions</div>
-            <div class="stat-value" id="stat-honcho-sessions">—</div>
+        </div>
+      </header>
+
+      <!-- Page container -->
+      <div class="page-container" id="page-container">
+
+        <!-- ==================== OVERVIEW ==================== -->
+        <div class="page active" data-page="overview">
+          <!-- Health status -->
+          <div class="section-label">System Health</div>
+          <div class="health-grid" id="health-grid">
+            <div class="health-card" data-service="api">
+              <div class="health-header">
+                <span class="health-name">API Server</span>
+                <div class="status-dot status-dot--sm status-dot--green"></div>
+              </div>
+              <div class="health-value">99.9%</div>
+              <div class="health-sub">uptime</div>
+            </div>
+            <div class="health-card" data-service="db">
+              <div class="health-header">
+                <span class="health-name">PostgreSQL</span>
+                <div class="status-dot status-dot--sm status-dot--green"></div>
+              </div>
+              <div class="health-value">Connected</div>
+              <div class="health-sub">5432 / merrick</div>
+            </div>
+            <div class="health-card" data-service="honcho">
+              <div class="health-header">
+                <span class="health-name">Honcho</span>
+                <div class="status-dot status-dot--sm status-dot--green"></div>
+              </div>
+              <div class="health-value">Connected</div>
+              <div class="health-sub">workspace: hermes</div>
+            </div>
+            <div class="health-card" data-service="mem0">
+              <div class="health-header">
+                <span class="health-name">mem0</span>
+                <div class="status-dot status-dot--sm status-dot--yellow"></div>
+              </div>
+              <div class="health-value">Degraded</div>
+              <div class="health-sub">latency 240ms</div>
+            </div>
           </div>
-          <div class="stat-card">
-            <div class="stat-label">Honcho Conclusions</div>
-            <div class="stat-value" id="stat-honcho-conclusions">—</div>
+
+          <!-- Quick stats -->
+          <div class="section-label">At a Glance</div>
+          <div class="stats-row" id="overview-stats">
+            <div class="stat-card">
+              <div class="stat-value" id="stat-devices">7</div>
+              <div class="stat-label">Devices</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="stat-memories">2,847</div>
+              <div class="stat-label">Memories</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="stat-keys">12</div>
+              <div class="stat-label">API Keys</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="stat-agents">4</div>
+              <div class="stat-label">Agents</div>
+            </div>
           </div>
-          <div class="stat-card">
-            <div class="stat-label">Last Sync</div>
-            <div class="stat-value stat-value-sm" id="stat-last-sync">—</div>
+
+          <!-- Two-column: Activity + Quick Start -->
+          <div class="overview-columns">
+            <!-- Recent activity -->
+            <div class="card card--full">
+              <div class="card-header">
+                <span class="card-title">Recent Activity</span>
+                <span class="card-badge">Last 10 memory writes</span>
+              </div>
+              <div class="activity-list" id="activity-list">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+
+            <!-- Quick start -->
+            <div class="card card--compact">
+              <div class="card-header">
+                <span class="card-title">Quick Start</span>
+              </div>
+              <div class="quickstart-steps">
+                <div class="qs-step">
+                  <div class="qs-num">1</div>
+                  <div class="qs-content">
+                    <div class="qs-title">Create an API key</div>
+                    <div class="qs-desc">Go to Devices & Keys → Create Key</div>
+                  </div>
+                </div>
+                <div class="qs-step">
+                  <div class="qs-num">2</div>
+                  <div class="qs-content">
+                    <div class="qs-title">Connect your device</div>
+                    <div class="qs-desc">Point your app to <code class="mono">http://localhost:5001/v1/</code></div>
+                  </div>
+                </div>
+                <div class="qs-step">
+                  <div class="qs-num">3</div>
+                  <div class="qs-content">
+                    <div class="qs-title">Write & query memories</div>
+                    <div class="qs-desc">POST /v1/memory — your device stores memories automatically</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="stat-card">
-            <div class="stat-label">Sync Status</div>
-            <div class="stat-value" id="stat-sync-status">—</div>
+        </div>
+
+        <!-- ==================== DEVICES & KEYS ==================== -->
+        <div class="page" data-page="devices">
+          <div class="page-header">
+            <div class="section-label">Devices</div>
+            <button class="btn btn--primary" id="btn-create-key">+ New API Key</button>
           </div>
-          <div class="stat-card stat-card-action">
-            <button class="btn btn-primary btn-sync" id="btn-sync-now">
-              <span class="btn-text">Sync Now</span>
-              <span class="spinner hidden" id="sync-spinner"></span>
+
+          <div class="table-card">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Device ID</th>
+                  <th>Honcho Peer</th>
+                  <th>mem0 User</th>
+                  <th>Last Seen</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="devices-table-body">
+                <!-- Populated by JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <div class="section-label" style="margin-top: 32px;">API Keys</div>
+          <div class="table-card">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Prefix</th>
+                  <th>Device</th>
+                  <th>Agent</th>
+                  <th>Permissions</th>
+                  <th>Rate Limit</th>
+                  <th>Last Used</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="keys-table-body">
+                <!-- Populated by JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Create Key Modal -->
+          <div class="modal-overlay" id="modal-key-create">
+            <div class="modal">
+              <div class="modal-header">
+                <h3>Create API Key</h3>
+                <button class="modal-close" data-close="modal-key-create">&times;</button>
+              </div>
+              <form id="form-create-key">
+                <div class="form-group">
+                  <label class="form-label">Key Name</label>
+                  <input type="text" class="form-input" id="key-name" placeholder="e.g. production-key" required>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Device ID</label>
+                    <input type="text" class="form-input" id="key-device" placeholder="e.g. hermes-phone" required>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Agent Slug</label>
+                    <select class="form-select" id="key-agent">
+                      <option value="">None (shared)</option>
+                      <option value="hombre">hombre</option>
+                      <option value="meredith">meredith</option>
+                      <option value="hermes">hermes</option>
+                      <option value="default">default</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Permissions</label>
+                    <div class="toggle-group">
+                      <label class="toggle"><input type="checkbox" id="perm-read" checked> Read</label>
+                      <label class="toggle"><input type="checkbox" id="perm-write" checked> Write</label>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Rate Limit (req/min)</label>
+                    <input type="number" class="form-input" id="key-rate" value="100" min="1" max="10000">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Memory Categories</label>
+                  <div class="checkbox-group" id="key-categories">
+                    <label class="check"><input type="checkbox" value="general" checked> general</label>
+                    <label class="check"><input type="checkbox" value="preferences" checked> preferences</label>
+                    <label class="check"><input type="checkbox" value="facts"> facts</label>
+                    <label class="check"><input type="checkbox" value="tasks"> tasks</label>
+                    <label class="check"><input type="checkbox" value="context"> context</label>
+                    <label class="check"><input type="checkbox" value="relationships"> relationships</label>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Max Memory Tokens</label>
+                  <input type="number" class="form-input" id="key-tokens" value="2000" min="100" max="100000">
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn--ghost" data-close="modal-key-create">Cancel</button>
+                  <button type="submit" class="btn btn--primary">Create Key</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- Secret Reveal Modal -->
+          <div class="modal-overlay" id="modal-secret-reveal">
+            <div class="modal">
+              <div class="modal-header">
+                <h3>API Key Created</h3>
+              </div>
+              <div class="secret-reveal">
+                <div class="secret-warning">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  <span>Copy this secret now. It will not be shown again.</span>
+                </div>
+                <div class="secret-box">
+                  <code class="mono" id="secret-value"></code>
+                  <button class="btn btn--ghost btn--sm" id="btn-copy-secret">Copy</button>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn--primary" data-close="modal-secret-reveal">I've saved it</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== AGENTS ==================== -->
+        <div class="page" data-page="agents">
+          <div class="page-header">
+            <div class="section-label">Agent Profiles</div>
+            <button class="btn btn--primary" id="btn-create-agent">+ New Agent</button>
+          </div>
+          <div class="agent-grid" id="agent-grid">
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Agent Detail View -->
+          <div class="agent-detail hidden" id="agent-detail">
+            <button class="btn btn--ghost btn--sm" id="btn-back-agents">← Back to agents</button>
+            <div class="agent-detail-header" id="agent-detail-header"></div>
+            <div class="section-label" style="margin-top: 24px;">Memories</div>
+            <div class="memory-list" id="agent-memories"></div>
+            <div class="section-label" style="margin-top: 24px;">Assigned Devices</div>
+            <div class="device-chips" id="agent-devices"></div>
+          </div>
+
+          <!-- Create Agent Modal -->
+          <div class="modal-overlay" id="modal-agent-create">
+            <div class="modal">
+              <div class="modal-header">
+                <h3>Create Agent Profile</h3>
+                <button class="modal-close" data-close="modal-agent-create">&times;</button>
+              </div>
+              <form id="form-create-agent">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Name</label>
+                    <input type="text" class="form-input" id="agent-name" placeholder="e.g. Hermes" required>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Slug</label>
+                    <input type="text" class="form-input mono" id="agent-slug" placeholder="e.g. hermes" pattern="[a-z0-9\-]+" required>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">System Prompt</label>
+                  <textarea class="form-textarea" id="agent-prompt" rows="5" placeholder="You are a helpful assistant..." required></textarea>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Memory Scope</label>
+                  <select class="form-select" id="agent-scope">
+                    <option value="shared">Shared (use global memories)</option>
+                    <option value="agent_only">Agent Only (isolated memories)</option>
+                  </select>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn--ghost" data-close="modal-agent-create">Cancel</button>
+                  <button type="submit" class="btn btn--primary">Create Agent</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== SYNC MONITOR ==================== -->
+        <div class="page" data-page="sync">
+          <div class="page-header">
+            <div class="section-label">Sync Monitor</div>
+            <button class="btn btn--primary" id="btn-sync-now">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15A9 9 0 1 1 12.36 3.64"/></svg>
+              Sync Now
             </button>
           </div>
-        </div>
 
-        <!-- Sample Cards -->
-        <div class="card-grid">
-          <div class="card">
-            <div class="card-header">
-              <span class="badge badge-mem0">mem0</span>
-              <span class="card-title">Recent Memories</span>
+          <!-- Sync status cards -->
+          <div class="sync-status-grid" id="sync-status-grid">
+            <div class="sync-card">
+              <div class="sync-card-header">
+                <span class="sync-source">Honcho</span>
+                <svg class="sync-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                <span class="sync-target">mem0</span>
+              </div>
+              <div class="sync-card-body">
+                <div class="sync-stat">
+                  <span class="sync-stat-label">Last sync</span>
+                  <span class="sync-stat-value mono" id="sync-last-h2m">2 min ago</span>
+                </div>
+                <div class="sync-stat">
+                  <span class="sync-stat-label">Items synced</span>
+                  <span class="sync-stat-value mono" id="sync-items-h2m">142</span>
+                </div>
+                <div class="sync-stat">
+                  <span class="sync-stat-label">Errors</span>
+                  <span class="sync-stat-value mono sync-stat-value--ok" id="sync-errors-h2m">0</span>
+                </div>
+              </div>
             </div>
-            <div class="card-body" id="mem0-samples">
-              <div class="empty-state">Loading...</div>
+            <div class="sync-card">
+              <div class="sync-card-header">
+                <span class="sync-source">mem0</span>
+                <svg class="sync-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                <span class="sync-target">Honcho</span>
+              </div>
+              <div class="sync-card-body">
+                <div class="sync-stat">
+                  <span class="sync-stat-label">Last sync</span>
+                  <span class="sync-stat-value mono" id="sync-last-m2h">5 min ago</span>
+                </div>
+                <div class="sync-stat">
+                  <span class="sync-stat-label">Items synced</span>
+                  <span class="sync-stat-value mono" id="sync-items-m2h">89</span>
+                </div>
+                <div class="sync-stat">
+                  <span class="sync-stat-label">Errors</span>
+                  <span class="sync-stat-value mono sync-stat-value--warn" id="sync-errors-m2h">3</span>
+                </div>
+              </div>
+            </div>
+            <div class="sync-card sync-card--queue">
+              <div class="sync-card-header">
+                <span class="sync-source">Pending Queue</span>
+              </div>
+              <div class="sync-card-body">
+                <div class="sync-stat">
+                  <span class="sync-stat-label">Waiting</span>
+                  <span class="sync-stat-value mono" id="sync-pending">12</span>
+                </div>
+                <div class="sync-stat">
+                  <span class="sync-stat-label">Oldest</span>
+                  <span class="sync-stat-value mono" id="sync-oldest">3 min ago</span>
+                </div>
+                <div class="sync-stat">
+                  <span class="sync-stat-label">Sync status</span>
+                  <span class="sync-stat-value sync-stat-value--ok" id="sync-status-label">Idle</span>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="card">
-            <div class="card-header">
-              <span class="badge badge-honcho">Honcho</span>
-              <span class="card-title">Recent Conclusions</span>
-            </div>
-            <div class="card-body" id="honcho-samples">
-              <div class="empty-state">Loading...</div>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      <!-- Query Tab -->
-      <section id="tab-query" class="tab-content">
-        <div class="query-container">
-          <div class="query-bar">
-            <input
-              type="text"
-              class="input"
-              id="query-input"
-              placeholder="Search memories and conclusions..."
-              autocomplete="off"
-            >
-            <button class="btn btn-primary" id="btn-search">
-              <span class="btn-text">Search Both Systems</span>
-              <span class="spinner hidden" id="search-spinner"></span>
-            </button>
-          </div>
-          <div id="query-results" class="query-results">
-            <div class="empty-state">
-              <p>Enter a query to search across mem0 and Honcho.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Sync Log Tab -->
-      <section id="tab-synclog" class="tab-content">
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Sync Operations</span>
-            <span class="muted" id="synclog-refresh-indicator">Auto-refreshing every 10s</span>
-          </div>
-          <div class="table-wrap">
-            <table id="synclog-table">
+          <!-- Sync history -->
+          <div class="section-label" style="margin-top: 32px;">Sync History</div>
+          <div class="table-card">
+            <table class="table">
               <thead>
                 <tr>
                   <th>Time</th>
                   <th>Direction</th>
                   <th>Items Synced</th>
                   <th>Errors</th>
+                  <th>Duration</th>
                   <th>Status</th>
                 </tr>
               </thead>
-              <tbody id="synclog-body">
-                <tr>
-                  <td colspan="5">
-                    <div class="empty-state">Loading sync log...</div>
-                  </td>
-                </tr>
+              <tbody id="sync-log-body">
+                <!-- Populated by JS -->
               </tbody>
             </table>
           </div>
         </div>
-      </section>
 
-      <!-- Categories Tab -->
-      <section id="tab-categories" class="tab-content">
-        <div class="section-header">
-          <h2 class="section-title">Categories</h2>
-          <button class="btn btn-primary" id="btn-new-category">New Category</button>
-        </div>
-        <div id="new-category-form" class="category-form hidden">
-          <input type="text" class="input" id="cat-name-input" placeholder="Category name">
-          <input type="color" class="input-color" id="cat-color-input" value="#6366f1">
-          <button class="btn btn-primary" id="btn-create-category">Create</button>
-          <button class="btn btn-ghost" id="btn-cancel-category">Cancel</button>
-        </div>
-        <div class="category-grid" id="category-grid">
-          <div class="empty-state">Loading categories...</div>
-        </div>
-        <div id="category-memories" class="hidden">
-          <div class="section-header">
-            <h3 class="section-title" id="category-memories-title">Memories in Category</h3>
-            <button class="btn btn-ghost btn-sm" id="btn-back-categories">Back to Categories</button>
-          </div>
-          <div id="category-memories-list"></div>
-        </div>
-      </section>
+        <!-- ==================== ANALYTICS ==================== -->
+        <div class="page" data-page="analytics">
+          <div class="section-label">Analytics</div>
 
-      <!-- Analytics Tab -->
-      <section id="tab-analytics" class="tab-content">
-        <div class="stats-grid" id="analytics-stats">
-          <div class="stat-card">
-            <div class="stat-label">Total Memories</div>
-            <div class="stat-value" id="analytics-total-memories">—</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Memories Today</div>
-            <div class="stat-value" id="analytics-today">—</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">This Week</div>
-            <div class="stat-value" id="analytics-week">—</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">This Month</div>
-            <div class="stat-value" id="analytics-month">—</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Total Categories</div>
-            <div class="stat-value" id="analytics-categories-count">—</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Total Webhooks</div>
-            <div class="stat-value" id="analytics-webhooks-count">—</div>
-          </div>
-        </div>
-        <div class="card-grid">
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title">Source Breakdown</span>
+          <div class="stats-row" id="analytics-stats">
+            <div class="stat-card">
+              <div class="stat-value" id="a-total">2,847</div>
+              <div class="stat-label">Total Memories</div>
             </div>
-            <div class="card-body" id="analytics-sources">
-              <div class="empty-state">Loading...</div>
+            <div class="stat-card">
+              <div class="stat-value" id="a-today">23</div>
+              <div class="stat-label">Created Today</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="a-week">156</div>
+              <div class="stat-label">This Week</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="a-month">847</div>
+              <div class="stat-label">This Month</div>
             </div>
           </div>
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title">Categories</span>
-            </div>
-            <div class="card-body" id="analytics-categories">
-              <div class="empty-state">Loading...</div>
-            </div>
-          </div>
-        </div>
-        <div class="card" style="margin-top: 16px;">
-          <div class="card-header">
-            <span class="card-title">Activity Timeline (30 days)</span>
-          </div>
-          <div class="card-body" id="analytics-timeline">
-            <div class="empty-state">Loading...</div>
-          </div>
-        </div>
-      </section>
 
-      <!-- Export Tab -->
-      <section id="tab-export" class="tab-content">
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Export Memories</span>
-          </div>
-          <div class="card-body">
-            <p class="muted" style="margin-bottom: 16px;">Export all memories in various formats. Categories are included where applicable.</p>
-            <div class="export-buttons">
-              <button class="btn btn-primary" onclick="App.exportData('json')">
-                <span class="btn-icon">{ }</span>
-                Export JSON
-              </button>
-              <button class="btn btn-primary" onclick="App.exportData('csv')">
-                <span class="btn-icon">CSV</span>
-                Export CSV
-              </button>
-              <button class="btn btn-primary" onclick="App.exportData('markdown')">
-                <span class="btn-icon">MD</span>
-                Export Markdown
-              </button>
+          <div class="chart-grid">
+            <!-- Memory growth chart -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Memory Growth</span>
+                <span class="card-badge">30 days</span>
+              </div>
+              <div class="chart-body" id="chart-growth">
+                <canvas id="canvas-growth" width="600" height="200"></canvas>
+              </div>
+            </div>
+
+            <!-- Device activity -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Device Activity</span>
+                <span class="card-badge">Memories per device</span>
+              </div>
+              <div class="chart-body" id="chart-devices">
+                <canvas id="canvas-devices" width="600" height="200"></canvas>
+              </div>
+            </div>
+
+            <!-- Category distribution -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Category Distribution</span>
+              </div>
+              <div class="chart-body chart-body--donut" id="chart-categories">
+                <canvas id="canvas-categories" width="300" height="300"></canvas>
+                <div class="donut-legend" id="donut-legend"></div>
+              </div>
+            </div>
+
+            <!-- API key usage -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">API Key Usage</span>
+                <span class="card-badge">Requests per key</span>
+              </div>
+              <div class="chart-body" id="chart-key-usage">
+                <canvas id="canvas-key-usage" width="600" height="200"></canvas>
+              </div>
             </div>
           </div>
         </div>
-      </section>
-    </main>
+
+        <!-- ==================== SETTINGS ==================== -->
+        <div class="page" data-page="settings">
+          <div class="section-label">Settings</div>
+          <div class="settings-tabs">
+            <button class="settings-tab active" data-settings-tab="general">General</button>
+            <button class="settings-tab" data-settings-tab="developer">Developer</button>
+            <button class="settings-tab settings-tab--danger" data-settings-tab="danger">Danger Zone</button>
+          </div>
+
+          <!-- General tab -->
+          <div class="settings-panel active" data-settings-panel="general">
+            <div class="settings-card">
+              <div class="settings-group">
+                <label class="form-label">Honcho URL</label>
+                <input type="text" class="form-input mono" id="setting-honcho-url" value="http://host.docker.internal:8000">
+              </div>
+              <div class="settings-group">
+                <label class="form-label">Honcho Workspace</label>
+                <input type="text" class="form-input mono" id="setting-honcho-workspace" value="hermes">
+              </div>
+              <div class="settings-group">
+                <label class="form-label">Honcho User Peer</label>
+                <input type="text" class="form-input mono" id="setting-honcho-peer" value="ron">
+              </div>
+              <div class="settings-group">
+                <label class="form-label">mem0 API URL</label>
+                <input type="text" class="form-input mono" id="setting-mem0-url" value="http://host.docker.internal:8888">
+              </div>
+              <div class="settings-group">
+                <label class="form-label">Sync Interval (seconds)</label>
+                <input type="number" class="form-input" id="setting-sync-interval" value="300" min="30" max="3600">
+              </div>
+              <div class="settings-group">
+                <label class="form-label">Sync Enabled</label>
+                <label class="toggle"><input type="checkbox" id="setting-sync-enabled" checked> Enable background sync</label>
+              </div>
+              <div class="settings-actions">
+                <button class="btn btn--primary" id="btn-save-settings">Save Settings</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Developer tab -->
+          <div class="settings-panel" data-settings-panel="developer">
+            <div class="settings-card">
+              <div class="settings-group">
+                <label class="form-label">API Documentation</label>
+                <div class="doc-links">
+                  <a href="/docs" target="_blank" class="doc-link">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    Swagger UI (/docs)
+                  </a>
+                  <a href="/redoc" target="_blank" class="doc-link">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    ReDoc (/redoc)
+                  </a>
+                </div>
+              </div>
+              <div class="settings-group">
+                <label class="form-label">Raw Config</label>
+                <pre class="config-json mono" id="config-raw">{
+  "DB_HOST": "host.docker.internal",
+  "DB_PORT": 5433,
+  "HONCHO_URL": "http://host.docker.internal:8000",
+  "HONCHO_WORKSPACE": "hermes",
+  "MEM0_API_URL": "http://host.docker.internal:8888",
+  "SYNC_INTERVAL": 300,
+  "SYNC_ENABLED": true
+}</pre>
+              </div>
+              <div class="settings-group">
+                <label class="form-label">Database Connection</label>
+                <div class="connection-status">
+                  <div class="status-dot status-dot--sm status-dot--green"></div>
+                  <span>Connected to PostgreSQL 5433 / merrick</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Danger Zone tab -->
+          <div class="settings-panel" data-settings-panel="danger">
+            <div class="settings-card settings-card--danger">
+              <div class="settings-group">
+                <label class="form-label">Purge Old Memories</label>
+                <p class="form-hint">Remove memories older than a specified number of days. This cannot be undone.</p>
+                <div class="danger-action">
+                  <input type="number" class="form-input" value="90" min="1" max="3650" style="width: 100px;">
+                  <span class="form-hint-inline">days</span>
+                  <button class="btn btn--danger">Purge</button>
+                </div>
+              </div>
+              <div class="settings-divider"></div>
+              <div class="settings-group">
+                <label class="form-label">Reset All Data</label>
+                <p class="form-hint">Delete all memories, devices, keys, and agent profiles. This is irreversible.</p>
+                <button class="btn btn--danger" id="btn-reset-data">Reset Everything</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
   </div>
 
-  <!-- Toast Container -->
-  <div id="toast-container" class="toast-container"></div>
+  <!-- Toast container -->
+  <div class="toast-container" id="toast-container"></div>
 
-  <script src="/static/app.js"></script>
-  <script>
-    // Resolve external service links from current hostname
-    document.querySelectorAll('.ext-link').forEach(link => {
-      const port = link.dataset.port;
-      if (port) {
-        link.href = `${window.location.protocol}//${window.location.hostname}:${port}`;
-      }
-    });
-  </script>
+  <script src="./app.js"></script>
 </body>
 </html>

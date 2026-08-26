@@ -1,0 +1,199 @@
+# ┌─────────────────────────────────────────────────────────────────┐
+# │  MERRICK — FULL STACK COMPOSE                                  │
+# │  Runs: PostgreSQL (pgvector), Redis, Honcho, mem0, and Merrick │
+# │                                                                 │
+# │  Usage (full stack):                                            │
+# │    docker compose -f docker-compose.full.yml up -d --build      │
+# │    docker compose -f docker-compose.full.yml ps                 │
+# │    docker compose -f docker-compose.full.yml logs -f merrick    │
+# │                                                                 │
+# │  TIP: Most users want docker-compose.yml (standalone) instead.  │
+# │  This file is for spinning up everything in one shot.           │
+# │                                                                 │
+# │  NOTE: Stop any existing Honcho/mem0 containers first:          │
+# │    docker stop honcho-api-1 honcho-deriver-1 mem0-api 2>/dev/null
+# └─────────────────────────────────────────────────────────────────┘
+
+services:
+  # ── PostgreSQL with pgvector ─────────────────────────────────────
+  # Shared database for Honcho and mem0
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: merrick-postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: supabase_strong_password_2026!
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -d postgres -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - merrick-net
+
+  # ── Redis (Honcho caching) ──────────────────────────────────────
+  redis:
+    image: redis:alpine
+    container_name: merrick-redis
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - merrick-net
+
+  # ── Honcho API ──────────────────────────────────────────────────
+  # Memory layer for AI agents
+  honcho-api:
+    build:
+      context: /home/reposed/docker/honcho
+      dockerfile: Dockerfile
+    entrypoint: ["sh", "docker/entrypoint.sh"]
+    container_name: merrick-honcho-api
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DB_CONNECTION_URI=postgresql+psycopg://postgres:supabase_strong_password_2026!@postgres:5432/postgres
+      - CACHE_URL=redis://redis:6379/0?suppress=true
+      - CACHE_ENABLED=true
+      - AUTH_USE_AUTH=false
+      - LOG_LEVEL=INFO
+    env_file:
+      - path: /home/reposed/docker/honcho/.env
+        required: false
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/app/.venv/bin/python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2).read()",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - merrick-net
+
+  # ── Honcho Deriver (background worker) ──────────────────────────
+  honcho-deriver:
+    build:
+      context: /home/reposed/docker/honcho
+      dockerfile: Dockerfile
+    entrypoint: ["/app/.venv/bin/python", "-m", "src.deriver"]
+    container_name: merrick-honcho-deriver
+    depends_on:
+      honcho-api:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DB_CONNECTION_URI=postgresql+psycopg://postgres:supabase_strong_password_2026!@postgres:5432/postgres
+      - CACHE_URL=redis://redis:6379/0?suppress=true
+      - CACHE_ENABLED=true
+      - AUTH_USE_AUTH=false
+      - LOG_LEVEL=INFO
+    env_file:
+      - path: /home/reposed/docker/honcho/.env
+        required: false
+    restart: unless-stopped
+    networks:
+      - merrick-net
+
+  # ── mem0 API ────────────────────────────────────────────────────
+  # Memory storage and retrieval
+  mem0:
+    build:
+      context: /home/reposed/docker/mem0
+      dockerfile: server/dev.Dockerfile
+    container_name: merrick-mem0
+    ports:
+      - "8888:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=supabase_strong_password_2026!
+      - POSTGRES_COLLECTION_NAME=memories
+      - AUTH_DISABLED=true
+      - MEM0_TELEMETRY=false
+      - JWT_SECRET=merrick-joint-secret-2026
+    volumes:
+      - ./mem0-history:/app/history
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - merrick-net
+
+  # ── Merrick (Memory Bridge) ─────────────────────────────────────
+  # Bridges Honcho and mem0
+  merrick:
+    build: .
+    container_name: merrick
+    ports:
+      - "5001:5001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      honcho-api:
+        condition: service_healthy
+      mem0:
+        condition: service_healthy
+    environment:
+      - MERRICK_DB_HOST=postgres
+      - MERRICK_DB_PORT=5432
+      - MERRICK_DB_USER=postgres
+      - MERRICK_DB_PASSWORD=supabase_strong_password_2026!
+      - MERRICK_DB_NAME=postgres
+      - MERRICK_HONCHO_URL=http://honcho-api:8000
+      - MERRICK_HONCHO_WORKSPACE=hermes
+      - MERRICK_HONCHO_USER_PEER=ron
+      - MERRICK_MEM0_API_URL=http://mem0:8000
+      - MERRICK_MEM0_EMAIL=xapathy@gmail.com
+      - MERRICK_MEM0_PASSWORD=OCn1B&AMKkQ8J^
+      - MERRICK_SYNC_INTERVAL=300
+      - MERRICK_SYNC_ENABLED=true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - merrick-net
+
+volumes:
+  postgres_data:
+
+networks:
+  merrick-net:
+    name: merrick-net
