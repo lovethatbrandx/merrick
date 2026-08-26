@@ -184,47 +184,21 @@ def analytics_categories():
 def analytics_devices():
     """Per-device breakdown of memory writes."""
     try:
-        # Check if device_id column exists on analytics table (added in Phase 2)
-        col_check = db.query_one("""
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'analytics' AND column_name = 'device_id'
-            ) as has_col
+        # Derive device info from source field in metadata
+        rows = db.query_all("""
+            SELECT
+                COALESCE(metadata->>'device_id', metadata->>'source_device', source, 'unknown') as device_id,
+                COALESCE(metadata->>'device_id', metadata->>'source_device', source, 'unknown') as device_name,
+                NULL as device_type,
+                COUNT(*) as memory_count,
+                MAX(created_at) as last_write,
+                COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE) as writes_today,
+                COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE - INTERVAL '7 days') as writes_this_week
+            FROM analytics
+            WHERE event_type = 'memory.created'
+            GROUP BY COALESCE(metadata->>'device_id', metadata->>'source_device', source, 'unknown')
+            ORDER BY memory_count DESC
         """)
-        has_device_col = col_check["has_col"] if col_check else False
-
-        if has_device_col:
-            rows = db.query_all("""
-                SELECT
-                    a.device_id::text,
-                    COALESCE(dp.name, a.device_id::text) as device_name,
-                    dp.device_type,
-                    COUNT(*) as memory_count,
-                    MAX(a.created_at) as last_write,
-                    COUNT(*) FILTER (WHERE a.created_at >= CURRENT_DATE) as writes_today,
-                    COUNT(*) FILTER (WHERE a.created_at >= CURRENT_DATE - INTERVAL '7 days') as writes_this_week
-                FROM analytics a
-                LEFT JOIN device_peers dp ON a.device_id = dp.id
-                WHERE a.event_type = 'memory.created' AND a.device_id IS NOT NULL
-                GROUP BY a.device_id, dp.name, dp.device_type
-                ORDER BY memory_count DESC
-            """)
-        else:
-            # Fallback: derive device info from source field in metadata
-            rows = db.query_all("""
-                SELECT
-                    COALESCE(metadata->>'device_id', metadata->>'source_device', source, 'unknown') as device_id,
-                    COALESCE(metadata->>'device_id', metadata->>'source_device', source, 'unknown') as device_name,
-                    NULL as device_type,
-                    COUNT(*) as memory_count,
-                    MAX(created_at) as last_write,
-                    COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE) as writes_today,
-                    COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE - INTERVAL '7 days') as writes_this_week
-                FROM analytics
-                WHERE event_type = 'memory.created'
-                GROUP BY COALESCE(metadata->>'device_id', metadata->>'source_device', source, 'unknown')
-                ORDER BY memory_count DESC
-            """)
 
         devices = []
         for r in (rows or []):

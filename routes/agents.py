@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+import re
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -8,6 +8,7 @@ from psycopg2.extras import Json
 
 import database as db
 from config import logger
+from routes import convert_datetimes, _build_update_sql
 
 
 # ---------------------------------------------------------------------------
@@ -16,7 +17,6 @@ from config import logger
 
 def _validate_slug(value: str, name: str = "slug") -> str:
     """Validate that a slug looks sane (alphanumeric + hyphens)."""
-    import re
     if not re.match(r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$", value):
         raise HTTPException(status_code=400, detail=f"Invalid {name}: must be lowercase alphanumeric with hyphens")
     return value
@@ -30,19 +30,14 @@ def _estimate_tokens(text: str) -> int:
 def _build_agent_response(profile: dict, memories: list, max_tokens: int) -> dict:
     """Build the agent response with token-budget-aware memory truncation."""
     profile_data = dict(profile)
-    # Convert datetime objects
-    for k, v in profile_data.items():
-        if isinstance(v, datetime):
-            profile_data[k] = v.isoformat()
+    convert_datetimes(profile_data)
 
     # Truncate memories to fit within token budget
     included_memories = []
     tokens_used = 0
     for mem in memories:
         mem_dict = dict(mem) if not isinstance(mem, dict) else mem
-        for k, v in mem_dict.items():
-            if isinstance(v, datetime):
-                mem_dict[k] = v.isoformat()
+        convert_datetimes(mem_dict)
         content = mem_dict.get("content", "")
         mem_tokens = _estimate_tokens(content)
         if tokens_used + mem_tokens > max_tokens:
@@ -112,9 +107,7 @@ def internal_list_agents():
         result = []
         for r in (rows or []):
             item = dict(r)
-            for k, v in item.items():
-                if isinstance(v, datetime):
-                    item[k] = v.isoformat()
+            convert_datetimes(item)
             result.append(item)
         return {"agents": result}
     except Exception as e:
@@ -178,13 +171,8 @@ def internal_update_agent(slug: str, req: AgentProfileUpdate):
     if not existing:
         raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
 
-    updates = []
-    params = []
     fields = req.model_dump(exclude_unset=True)
-
-    for field, value in fields.items():
-        updates.append(f"{field} = %s")
-        params.append(value)
+    updates, params = _build_update_sql(fields)
 
     # Always bump updated_at
     updates.append("updated_at = NOW()")
@@ -260,9 +248,7 @@ def external_list_agents(request: Request):
         result = []
         for r in (rows or []):
             item = dict(r)
-            for k, v in item.items():
-                if isinstance(v, datetime):
-                    item[k] = v.isoformat()
+            convert_datetimes(item)
             result.append(item)
 
         return {"agents": result}
@@ -422,9 +408,7 @@ def search_agent_memory(slug: str, req: AgentMemorySearch, request: Request):
         result = []
         for m in (memories or []):
             item = dict(m)
-            for k, v in item.items():
-                if isinstance(v, datetime):
-                    item[k] = v.isoformat()
+            convert_datetimes(item)
             result.append(item)
 
         return {"results": result, "count": len(result)}

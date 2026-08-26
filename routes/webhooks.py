@@ -10,22 +10,14 @@ from typing import Optional, List
 
 import database as db
 from config import logger
+from routes import _validate_uuid
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
 
-def _validate_uuid(value: str, name: str = "id") -> str:
-    """Validate UUID format and raise 400 if invalid."""
-    try:
-        uuid.UUID(value)
-        return value
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid {name} format: must be a valid UUID")
-
-
 def _sign_payload(payload: dict, secret: str) -> str:
     body_bytes = json.dumps(payload, default=str).encode()
-    return hmac.new(secret.encode(), body_bytes, hashlib.sha256).hexdigest()
+    return hmac.HMAC(secret.encode(), body_bytes, hashlib.sha256).hexdigest()
 
 
 class WebhookCreate(BaseModel):

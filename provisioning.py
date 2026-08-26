@@ -115,8 +115,8 @@ def get_or_provision(device_id: str, metadata: Optional[dict] = None) -> dict:
                     "UPDATE device_identities SET last_seen_at = NOW() WHERE device_id = %s",
                     (device_id,),
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to update last_seen_at for %s: %s", device_id, e)
             return {**cached, "is_new": False}
 
     # Check database
@@ -139,8 +139,8 @@ def get_or_provision(device_id: str, metadata: Optional[dict] = None) -> dict:
                     "UPDATE device_identities SET last_seen_at = NOW() WHERE device_id = %s",
                     (device_id,),
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to update last_seen_at for %s: %s", device_id, e)
             return result
     except Exception as e:
         logger.warning("device_identities query failed: %s", e)

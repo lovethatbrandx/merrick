@@ -9,6 +9,7 @@ from typing import Optional, List
 
 import database as db
 from config import logger
+from routes import _validate_uuid, convert_datetimes, _build_update_sql
 
 router = APIRouter(prefix="/api/keys", tags=["keys"])
 
@@ -47,22 +48,11 @@ def _generate_key() -> tuple[str, str, str]:
     return secret, key_hash, key_prefix
 
 
-def _validate_uuid(value: str, name: str = "id") -> str:
-    try:
-        uuid.UUID(value)
-        return value
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid {name} format: must be a valid UUID")
-
-
 def _sanitize_key(row: dict) -> dict:
     """Strip key_hash from a row before returning it. Never leak the hash."""
     safe = dict(row)
     safe.pop("key_hash", None)
-    # Convert datetime objects to strings for JSON serialization
-    for k, v in safe.items():
-        if isinstance(v, datetime):
-            safe[k] = v.isoformat()
+    convert_datetimes(safe)
     return safe
 
 
@@ -170,18 +160,7 @@ def update_key(key_id: str, req: KeyUpdate):
     if not existing:
         raise HTTPException(status_code=404, detail="Key not found")
 
-    updates = []
-    params = []
-    fields = req.model_dump(exclude_unset=True)
-
-    for field, value in fields.items():
-        if field not in VALID_UPDATE_COLUMNS:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid field: {field} is not an updatable column",
-            )
-        updates.append(f"{field} = %s")
-        params.append(value)
+    updates, params = _build_update_sql(req.model_dump(exclude_unset=True), VALID_UPDATE_COLUMNS)
 
     if not updates:
         return {"updated": key_id}

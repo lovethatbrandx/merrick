@@ -6,17 +6,9 @@ from typing import Optional
 
 import database as db
 from config import logger
+from routes import _validate_uuid
 
 router = APIRouter(prefix="/api/categories", tags=["categories"])
-
-
-def _validate_uuid(value: str, name: str = "id") -> str:
-    """Validate UUID format and raise 400 if invalid."""
-    try:
-        uuid.UUID(value)
-        return value
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid {name} format: must be a valid UUID")
 
 
 class CategoryCreate(BaseModel):

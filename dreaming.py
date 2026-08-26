@@ -4,8 +4,6 @@ dreaming.py — Memory compaction loop for Merrick.
 Periodically compacts, deduplicates, and summarizes memories to prevent
 prompt pollution. Marks memories as compacted rather than deleting them,
 so users can recover anything that was touched.
-
-I sold my soul to Satan for this job. Worst trade ever.
 """
 
 import re
